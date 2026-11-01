@@ -21,14 +21,18 @@ function tierFor(absMs, window) {
 const FAMILY = { hiHatClosed: "hiHat", hiHatOpen: "hiHat" };
 const familyOf = (voice) => FAMILY[voice] || voice;
 
+// Beats in one pass of a pattern: `bars` bars (default 1) of `beatsPerBar` (default 4).
+const beatsPerLoop = (pattern) => (pattern.bars || 1) * (pattern.beatsPerBar || 4);
+
 // Append repeats [fromRepeat, toRepeat) of a pattern to `list` (kept sorted by time,
-// idx continuing). pattern.hits: [{ beat, voice, accent?, ghost?, label? }].
+// idx continuing). pattern.hits: [{ beat, voice, accent?, ghost?, label? }], beat measured
+// from the start of the pattern, so a two-bar pattern has beats 0 to 7.99.
 function appendRepeats(list, pattern, bpm, countInBeats, fromRepeat, toRepeat) {
   const msPerBeat = 60000 / bpm;
-  const beatsPerBar = pattern.beatsPerBar || 4;
+  const span = beatsPerLoop(pattern);
   for (let r = fromRepeat; r < toRepeat; r++) {
     const chunk = pattern.hits.map((h) => {
-      const beatAbs = countInBeats + r * beatsPerBar + h.beat;
+      const beatAbs = countInBeats + r * span + h.beat;
       return { ms: beatAbs * msPerBeat, beatAbs, voice: h.voice, accent: !!h.accent, ghost: !!h.ghost, label: h.label || "", bar: r, idx: 0 };
     });
     chunk.sort((a, b) => a.ms - b.ms);
@@ -148,5 +152,5 @@ function summarise(result, { windowMs = 100, uptoMs = Infinity, fromMs = -Infini
   };
 }
 
-const Grader = { TIERS, tierFor, familyOf, appendRepeats, expandPattern, matchOne, matchHits, summarise };
+const Grader = { TIERS, tierFor, familyOf, beatsPerLoop, appendRepeats, expandPattern, matchOne, matchHits, summarise };
 module.exports = Grader;

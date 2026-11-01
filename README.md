@@ -110,8 +110,20 @@ npm run smoke          # headless Chromium: scripted runs through the MIDI handl
   the built-in synth.
 - Voices: `bassDrum`, `snare`, `hiHatClosed`, `hiHatOpen`, `hiHatFoot`, `highTom`, `midTom`,
   `floorTom`, `crash`, `ride`. Pad maps saved under the older names migrate on load.
-- Add a pattern by adding an entry to `PATTERNS` in `src/app.html`: beats within a 4/4 bar,
-  a voice name, optional `accent`, `ghost` and sticking `label`.
+- Built-in patterns are the `PATTERNS` list in `src/app.html`: `beat` measured from the start
+  of the pattern (a two-bar pattern runs 0 to 7.75), a voice name, optional `bars` (1 to 8,
+  default 1), `accent`, `ghost` and sticking `label`. The same shape is what the editor
+  saves and what Export writes: `{ "app": "drum-trainer", "version": 1, "patterns": [...] }`.
+
+## Your own patterns
+
+The **Pattern editor** panel is a sixteenth-note step grid in 4/4, one row per voice, one to
+eight bars long. Click a cell for a note, again for an accent, again for a ghost note, again
+to clear; type R or L in the sticking row. "Edit selected pattern" loads any pattern,
+built-in ones included, as a starting point. Saved patterns appear under "My patterns" in
+the pattern list, are stored in the browser, and loop as a whole: a four-bar pattern with
+"Loops" set to 2 plays eight bars. "Export my patterns" writes them all to a JSON file;
+"Import" merges such a file back in, on another browser or from a friend.
 
 ## Deploy
 

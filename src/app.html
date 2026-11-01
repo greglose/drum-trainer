@@ -46,6 +46,22 @@
   .map-cell small { display: block; color: var(--muted); }
   .hint { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
   a { color: var(--accent); }
+  .ed-controls { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: end; margin-bottom: 10px; }
+  .ed-controls input[type=text] { width: 260px; font: inherit; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+  .ed-wrap { overflow-x: auto; padding-bottom: 6px; }
+  #edGrid { border-collapse: separate; border-spacing: 2px; width: auto; font-size: 12px; }
+  #edGrid th, #edGrid td { padding: 0; border: 0; text-align: center; }
+  #edGrid th.ed-voice { text-align: right; padding-right: 8px; white-space: nowrap; color: var(--muted); font-weight: 500; }
+  #edGrid td.beat, #edGrid th.beat { padding-left: 6px; }
+  #edGrid td.bar, #edGrid th.bar { padding-left: 14px; }
+  #edGrid th.ed-bar { text-align: left; color: var(--fg); padding: 2px 0 2px 14px; font-weight: 600; }
+  #edGrid th.ed-count { color: var(--muted); font-weight: 400; }
+  #edGrid th.ed-count.beat { color: var(--fg); font-weight: 600; }
+  .cell { width: 24px; height: 24px; padding: 0; border-radius: 5px; border: 1px solid var(--line); background: #0e1014; color: #06202c; font-weight: 700; font-size: 11px; line-height: 1; }
+  .cell[data-state=plain] { background: var(--accent); border-color: var(--accent); }
+  .cell[data-state=accent] { background: var(--perfect); border-color: var(--perfect); }
+  .cell[data-state=ghost] { background: transparent; border-color: var(--accent); color: var(--accent); }
+  .stick { width: 24px; height: 22px; text-align: center; padding: 0; font-size: 12px; background: #0e1014; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; text-transform: uppercase; }
   kbd { background: #0e1014; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 12px; }
 </style>
 </head>
@@ -94,6 +110,26 @@
   <div class="panel" id="report" hidden>
     <h2>Last run</h2>
     <div id="reportBody"></div>
+  </div>
+
+  <div class="panel" id="editor">
+    <h2>Pattern editor</h2>
+    <div class="ed-controls">
+      <label>Name <input id="edName" type="text" maxlength="60" placeholder="My groove" /></label>
+      <label>Bars <select id="edBars"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+      <button id="edNew">New</button>
+      <button id="edLoad">Edit selected pattern</button>
+      <button id="edSave" class="primary">Save</button>
+      <button id="edSavePlay">Save and play</button>
+      <button id="edDelete" disabled>Delete</button>
+      <button id="edExport">Export my patterns</button>
+      <button id="edImport">Import</button>
+      <input id="edFile" type="file" accept="application/json,.json" hidden />
+    </div>
+    <div class="ed-wrap"><table id="edGrid"></table></div>
+    <p class="hint">Sixteenth-note grid in 4/4, up to eight bars. Click a cell for a note, again for an accent (&gt;), again for a ghost note ( ), again to clear.
+      Type R or L in the sticking row. Saved patterns appear under "My patterns" in the pattern list and live in this browser; Export writes them to a file you can import elsewhere.</p>
+    <p class="hint" id="edStatus"></p>
   </div>
 
   <div class="panel">
@@ -157,6 +193,45 @@
     { id: "double", name: "Double Stroke Open Roll, 16th notes (RRLL)", hits: sixteenths("snare", 4).map((h, i) => ({ ...h, label: "RRLL"[i % 4] })) },
     { id: "tomsround", name: "8th notes around the kit: snare, high tom, mid tom, floor tom", hits: [{ beat: 0, voice: "snare" }, { beat: .5, voice: "snare" }, { beat: 1, voice: "highTom" }, { beat: 1.5, voice: "highTom" }, { beat: 2, voice: "midTom" }, { beat: 2.5, voice: "midTom" }, { beat: 3, voice: "floorTom" }, { beat: 3.5, voice: "floorTom" }] },
   ];
+
+  // ---------- custom patterns (browser storage) ----------
+  const CUSTOM_KEY = "drumTrainer.customPatterns";
+  const MAX_BARS = 8;
+  function normalizePattern(p) {
+    if (!p || typeof p !== "object") throw new Error("not a pattern");
+    const name = String(p.name || "").trim().slice(0, 60);
+    if (!name) throw new Error("a pattern needs a name");
+    const bars = Math.min(MAX_BARS, Math.max(1, Math.round(Number(p.bars) || 1)));
+    if (!Array.isArray(p.hits) || !p.hits.length) throw new Error(`"${name}" has no notes`);
+    const hits = p.hits.map((h) => {
+      const beat = Number(h.beat);
+      if (!(beat >= 0 && beat < bars * 4) || Math.abs(beat * 4 - Math.round(beat * 4)) > 1e-6) throw new Error(`"${name}": beat ${h.beat} is not on the sixteenth grid`);
+      if (!VOICES.includes(h.voice)) throw new Error(`"${name}": unknown voice ${h.voice}`);
+      const label = /^[RL]$/i.test(h.label || "") ? h.label.toUpperCase() : "";
+      return { beat: Math.round(beat * 4) / 4, voice: h.voice, accent: !!h.accent, ghost: !!h.ghost && !h.accent, label };
+    });
+    return { id: typeof p.id === "string" && p.id.startsWith("custom-") ? p.id : null, name, bars, hits };
+  }
+  function loadCustom() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(CUSTOM_KEY) || "[]");
+      return Array.isArray(raw) ? raw.map((p) => { try { const n = normalizePattern(p); n.id = n.id || newCustomId(); return n; } catch { return null; } }).filter(Boolean) : [];
+    } catch { return []; }
+  }
+  function saveCustom() { try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(custom)); } catch {} }
+  const newCustomId = () => "custom-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  let custom = loadCustom();
+  const allPatterns = () => [...PATTERNS, ...custom];
+  const findPattern = (id) => allPatterns().find((p) => p.id === id) || PATTERNS[0];
+  function renderPatternSelect(selectedId) {
+    const sel = $("patternSel");
+    sel.innerHTML = "";
+    const group = (label, list) => { const og = document.createElement("optgroup"); og.label = label; for (const p of list) { const o = document.createElement("option"); o.value = p.id; o.textContent = p.name + (p.bars > 1 ? ` (${p.bars} bars)` : ""); og.appendChild(o); } sel.appendChild(og); };
+    group("Built-in", PATTERNS);
+    if (custom.length) group("My patterns", custom);
+    sel.value = allPatterns().some((p) => p.id === selectedId) ? selectedId : PATTERNS[0].id;
+    try { localStorage.setItem("drumTrainer.pattern", sel.value); } catch {}
+  }
 
   // ---------- state ----------
   let padMap = loadMap();
@@ -394,7 +469,7 @@
   // ---------- run lifecycle: practice run, playback of the written pattern, or metronome only ----------
   function startRun({ demo = false, metronome = false } = {}) {
     ensureCtx();
-    const pattern = metronome ? null : PATTERNS.find((p) => p.id === $("patternSel").value) || PATTERNS[0];
+    const pattern = metronome ? null : findPattern($("patternSel").value);
     const bpm = Math.min(240, Math.max(40, Number($("bpm").value) || 90));
     const forever = $("loopForever").checked;
     const loops = forever ? Infinity : Math.min(999, Math.max(1, Number($("loops").value) || 4));
@@ -403,8 +478,9 @@
     saveNumber("drumTrainer.loops", $("loops").value); saveNumber("drumTrainer.forever", forever ? 1 : 0);
     const msPerBeat = 60000 / bpm;
     const beatsPerBar = pattern?.beatsPerBar || 4;
+    const beatsPerLoop = pattern ? Grader.beatsPerLoop(pattern) : beatsPerBar; // a multi-bar pattern loops as a whole
     const countIn = metronome ? 0 : COUNT_IN_BEATS; // the metronome starts on bar 1
-    const totalBeats = forever ? Infinity : countIn + loops * beatsPerBar;
+    const totalBeats = forever ? Infinity : countIn + loops * beatsPerLoop;
     const midiOut = demo && $("soundSel").value !== "synth" && midiAccess ? midiAccess.outputs.get($("soundSel").value) || null : null;
 
     // Align the audio clock to performance.now(), in the "what you hear" domain.
@@ -415,7 +491,7 @@
     const songStartPerf = anchorPerf + (songStartCtx - anchorCtx) * 1000;
 
     run = {
-      pattern, bpm, loops, forever, calibrationMs, msPerBeat, beatsPerBar, countIn, totalBeats,
+      pattern, bpm, loops, forever, calibrationMs, msPerBeat, beatsPerBar, beatsPerLoop, countIn, totalBeats,
       songStartCtx, songStartPerf, demo, metronome, midiOut,
       expected: [], generatedLoops: 0,
       played: [], matches: new Map(), extras: [],
@@ -437,7 +513,7 @@
   // Make sure expected notes exist up to `uptoBeat` (all loops when finite). The metronome has none.
   function ensureExpected(uptoBeat) {
     if (!run.pattern) return;
-    const want = run.forever ? Math.ceil((uptoBeat - run.countIn) / run.beatsPerBar) + 1 : run.loops;
+    const want = run.forever ? Math.ceil((uptoBeat - run.countIn) / run.beatsPerLoop) + 1 : run.loops;
     if (want > run.generatedLoops) {
       Grader.appendRepeats(run.expected, run.pattern, run.bpm, run.countIn, run.generatedLoops, want);
       run.generatedLoops = want;
@@ -481,9 +557,9 @@
     }
     if (run.forever) {
       // Score completed loops only; the partial loop at Stop and notes generated ahead are dropped.
-      const playedLoops = Math.max(0, Math.floor((run.endMs / run.msPerBeat - run.countIn) / run.beatsPerBar));
+      const playedLoops = Math.max(0, Math.floor((run.endMs / run.msPerBeat - run.countIn) / run.beatsPerLoop));
       run.expected = run.expected.filter((e) => e.bar < playedLoops);
-      run.extras = run.extras.filter((p) => p.msAdj <= (run.countIn + playedLoops * run.beatsPerBar) * run.msPerBeat);
+      run.extras = run.extras.filter((p) => p.msAdj <= (run.countIn + playedLoops * run.beatsPerLoop) * run.msPerBeat);
       run.loops = playedLoops;
     }
     run.summary = Grader.summarise(result(), { windowMs: WINDOW_MS });
@@ -535,8 +611,14 @@
   function drawStaff(W, families) {
     g.strokeStyle = COLORS.line; g.lineWidth = 1;
     for (const pos of [0, 2, 4, 6, 8]) { g.beginPath(); g.moveTo(X0, yPos(pos) + 0.5); g.lineTo(W, yPos(pos) + 0.5); g.stroke(); }
-    g.fillStyle = COLORS.idle; g.font = "13px system-ui"; g.textAlign = "right";
-    for (const fam of families) g.fillText(STAFF_LABEL[fam], X0 - 10, yPos(STAFF_POS[fam]) + 4);
+    g.fillStyle = COLORS.idle; g.font = "12px system-ui"; g.textAlign = "right";
+    // Labels top to bottom; neighbours one staff step apart (crash and hi-hat) are nudged so they do not overlap.
+    let lastY = -Infinity;
+    for (const fam of [...families].sort((a, b) => STAFF_POS[b] - STAFF_POS[a])) {
+      const y = Math.max(yPos(STAFF_POS[fam]) + 4, lastY + 13);
+      g.fillText(STAFF_LABEL[fam], X0 - 10, y);
+      lastY = y;
+    }
     g.textAlign = "left";
   }
   function notehead(x, y, voice, mode, color, small) {
@@ -589,8 +671,9 @@
       g.beginPath(); g.moveTo(x, yPos(8)); g.lineTo(x, yPos(0)); g.stroke();
       if (bar) {
         g.fillStyle = COLORS.idle; g.font = "12px system-ui";
-        const loopNo = (b - COUNT_IN) / bpb + 1;
-        g.fillText(b < COUNT_IN ? "count-in" : (run.forever || loopNo <= run.loops ? "bar " + loopNo + (run.forever ? "" : " of " + run.loops) : "end"), x + 4, yPos(10) - 26);
+        const barNo = (b - COUNT_IN) / bpb + 1;
+        const totalBars = run.loops * run.beatsPerLoop / bpb;
+        g.fillText(b < COUNT_IN ? "count-in" : (run.forever || barNo <= totalBars ? "bar " + barNo + (run.forever ? "" : " of " + totalBars) : "end"), x + 4, yPos(10) - 26);
       }
       for (let s = 0; s < sub; s++) {
         const sx = xFor(b + s / sub);
@@ -686,7 +769,10 @@
     const rows = Object.entries(s.voices).map(([v, r]) =>
       `<tr><td>${VOICE_LABEL[v]}</td><td class="num">${r.hit}/${r.expected}</td><td class="num">${r.wrongVoice || "–"}</td><td class="num">${fmt(r.meanOffsetMs)} ms</td><td class="num">±${r.spreadMs.toFixed(0)} ms</td><td class="num">${vel(r.accentVel)}</td><td class="num">${vel(r.plainVel)}</td><td class="num">${vel(r.ghostVel)}</td></tr>`).join("");
     const tendency = Math.abs(s.meanOffsetMs) < 8 ? "right on the click" : s.meanOffsetMs > 0 ? "behind the click (dragging)" : "ahead of the click (rushing)";
-    const length = run.loops ? `${run.loops} bar${run.loops === 1 ? "" : "s"}` : "stopped before the first bar finished";
+    const barsPerLoop = run.beatsPerLoop / run.beatsPerBar;
+    const length = run.loops
+      ? (barsPerLoop > 1 ? `${run.loops} loop${run.loops === 1 ? "" : "s"} of ${barsPerLoop} bars` : `${run.loops} bar${run.loops === 1 ? "" : "s"}`)
+      : "stopped before the first pass finished";
     $("reportBody").innerHTML = `
       <p><strong style="font-size:26px">${Math.round(s.accuracy)}%</strong> &nbsp; ${run.pattern.name} · quarter note = ${run.bpm} · ${length}</p>
       <p>${s.counts.perfect} perfect · ${s.counts.good} good · ${s.counts.ok} ok · ${s.counts["late-ish"]} loose · ${s.counts.miss} missed · ${s.counts.wrongVoice} wrong open/closed hi-hat · ${s.extras} extra hits</p>
@@ -700,8 +786,143 @@
     requestAnimationFrame(draw);
   }
 
+  // ---------- pattern editor ----------
+  const ED_ROWS = ["crash", "hiHatClosed", "hiHatOpen", "ride", "highTom", "midTom", "snare", "floorTom", "bassDrum", "hiHatFoot"];
+  const ED_STATES = [null, "plain", "accent", "ghost"];
+  const ED_GLYPH = { plain: "", accent: ">", ghost: "( )" };
+  let draft = newDraft();
+  function newDraft() { return { id: null, name: "", bars: 1, cells: {}, sticking: {} }; } // cells: "voice@step" -> state
+  function draftFromPattern(p) {
+    const d = { id: p.id.startsWith("custom-") ? p.id : null, name: p.name, bars: p.bars || 1, cells: {}, sticking: {} };
+    for (const h of p.hits) {
+      const step = Math.round(h.beat * 4);
+      d.cells[`${h.voice}@${step}`] = h.accent ? "accent" : h.ghost ? "ghost" : "plain";
+      if (h.label) d.sticking[step] = h.label;
+    }
+    return d;
+  }
+  function patternFromDraft(d) {
+    const hits = [];
+    for (const [key, state] of Object.entries(d.cells)) {
+      const [voice, s] = key.split("@");
+      const step = Number(s);
+      if (step >= d.bars * 16) continue;
+      hits.push({ beat: step / 4, voice, accent: state === "accent", ghost: state === "ghost", label: d.sticking[step] || "" });
+    }
+    hits.sort((a, b) => a.beat - b.beat || ED_ROWS.indexOf(a.voice) - ED_ROWS.indexOf(b.voice));
+    return normalizePattern({ id: d.id, name: d.name, bars: d.bars, hits });
+  }
+  function edStatus(text) { $("edStatus").textContent = text; }
+  function renderEditor() {
+    $("edName").value = draft.name;
+    $("edBars").value = String(draft.bars);
+    const cols = draft.bars * 16;
+    const cls = (i) => (i % 16 === 0 ? "bar" : i % 4 === 0 ? "beat" : "");
+    const t = $("edGrid");
+    t.innerHTML = "";
+    const head1 = document.createElement("tr");
+    head1.innerHTML = "<th></th>" + Array.from({ length: draft.bars }, (_, b) => `<th colspan="16" class="ed-bar">bar ${b + 1}</th>`).join("");
+    const head2 = document.createElement("tr");
+    head2.innerHTML = "<th></th>" + Array.from({ length: cols }, (_, i) => `<th class="ed-count ${cls(i)}${i % 4 === 0 ? " beat" : ""}">${i % 4 === 0 ? (Math.floor(i / 4) % 4) + 1 : ["", "e", "&", "a"][i % 4]}</th>`).join("");
+    t.append(head1, head2);
+    for (const voice of ED_ROWS) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<th class="ed-voice">${VOICE_LABEL[voice]}</th>` + Array.from({ length: cols }, (_, i) => {
+        const st = draft.cells[`${voice}@${i}`] || "";
+        return `<td class="${cls(i)}"><button type="button" class="cell" data-voice="${voice}" data-step="${i}" data-state="${st}" aria-label="${VOICE_LABEL[voice]}, bar ${Math.floor(i / 16) + 1} step ${(i % 16) + 1}${st ? ", " + st : ""}">${ED_GLYPH[st] || ""}</button></td>`;
+      }).join("");
+      t.appendChild(tr);
+    }
+    const stick = document.createElement("tr");
+    stick.innerHTML = `<th class="ed-voice">Sticking</th>` + Array.from({ length: cols }, (_, i) => `<td class="${cls(i)}"><input class="stick" data-step="${i}" maxlength="1" value="${draft.sticking[i] || ""}" aria-label="sticking, bar ${Math.floor(i / 16) + 1} step ${(i % 16) + 1}" /></td>`).join("");
+    t.appendChild(stick);
+    $("edDelete").disabled = !draft.id;
+  }
+  $("edGrid").addEventListener("click", (e) => {
+    const b = e.target.closest("button.cell");
+    if (!b) return;
+    const key = `${b.dataset.voice}@${b.dataset.step}`;
+    const next = ED_STATES[(ED_STATES.indexOf(draft.cells[key] || null) + 1) % ED_STATES.length];
+    if (next) draft.cells[key] = next; else delete draft.cells[key];
+    b.dataset.state = next || "";
+    b.textContent = ED_GLYPH[next] || "";
+    edStatus("");
+  });
+  $("edGrid").addEventListener("input", (e) => {
+    const inp = e.target.closest("input.stick");
+    if (!inp) return;
+    const v = inp.value.toUpperCase();
+    inp.value = /^[RL]$/.test(v) ? v : "";
+    if (inp.value) draft.sticking[inp.dataset.step] = inp.value; else delete draft.sticking[inp.dataset.step];
+  });
+  $("edName").oninput = () => { draft.name = $("edName").value; };
+  $("edBars").onchange = () => { draft.bars = Number($("edBars").value); renderEditor(); };
+  $("edNew").onclick = () => { draft = newDraft(); renderEditor(); edStatus("New pattern. Click cells to add notes, then Save."); };
+  $("edLoad").onclick = () => {
+    const p = findPattern($("patternSel").value);
+    draft = draftFromPattern(p);
+    renderEditor();
+    edStatus(draft.id ? `Editing "${p.name}".` : `Editing a copy of the built-in "${p.name}"; Save stores it under My patterns.`);
+  };
+  function saveDraft() {
+    try {
+      const p = patternFromDraft(draft);
+      p.id = draft.id || newCustomId();
+      const at = custom.findIndex((c) => c.id === p.id);
+      if (at >= 0) custom[at] = p; else custom.push(p);
+      saveCustom();
+      draft.id = p.id;
+      renderPatternSelect(p.id);
+      renderEditor();
+      edStatus(`Saved "${p.name}" (${p.hits.length} notes, ${p.bars} bar${p.bars === 1 ? "" : "s"}).`);
+      return p;
+    } catch (err) { edStatus("Not saved: " + err.message); return null; }
+  }
+  $("edSave").onclick = saveDraft;
+  $("edSavePlay").onclick = () => { if (saveDraft() && !(run && run.active)) startRun({ demo: true }); };
+  $("edDelete").onclick = () => {
+    if (!draft.id) return;
+    const p = custom.find((c) => c.id === draft.id);
+    custom = custom.filter((c) => c.id !== draft.id);
+    saveCustom();
+    renderPatternSelect(PATTERNS[0].id);
+    draft = newDraft();
+    renderEditor();
+    edStatus(p ? `Deleted "${p.name}".` : "");
+  };
+  $("edExport").onclick = () => {
+    const blob = new Blob([JSON.stringify({ app: "drum-trainer", version: 1, patterns: custom }, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "drum-trainer-patterns.json";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    edStatus(`Exported ${custom.length} pattern${custom.length === 1 ? "" : "s"}.`);
+  };
+  $("edImport").onclick = () => $("edFile").click();
+  $("edFile").onchange = async () => {
+    const file = $("edFile").files[0];
+    $("edFile").value = "";
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      const list = Array.isArray(data) ? data : Array.isArray(data?.patterns) ? data.patterns : [data];
+      let added = 0, replaced = 0;
+      for (const raw of list) {
+        const p = normalizePattern(raw);
+        const at = p.id ? custom.findIndex((c) => c.id === p.id) : -1;
+        if (at >= 0) { custom[at] = p; replaced++; } else { p.id = newCustomId(); custom.push(p); added++; }
+      }
+      saveCustom();
+      renderPatternSelect($("patternSel").value);
+      edStatus(`Imported ${added} new pattern${added === 1 ? "" : "s"}${replaced ? `, updated ${replaced}` : ""}.`);
+    } catch (err) { edStatus("Import failed: " + err.message); }
+  };
+
   // ---------- wiring ----------
-  for (const p of PATTERNS) { const o = document.createElement("option"); o.value = p.id; o.textContent = p.name; $("patternSel").appendChild(o); }
+  renderPatternSelect((() => { try { return localStorage.getItem("drumTrainer.pattern"); } catch { return null; } })());
+  $("patternSel").onchange = () => { try { localStorage.setItem("drumTrainer.pattern", $("patternSel").value); } catch {} };
+  renderEditor();
   $("bpm").value = loadNumber("drumTrainer.bpm", 90);
   $("cal").value = loadNumber("drumTrainer.cal", 0);
   $("loops").value = loadNumber("drumTrainer.loops", 4);

@@ -115,3 +115,12 @@ test("velocities are bucketed by the written dynamic: accent, plain, ghost", () 
   assert.equal(s.voices.snare.ghostVel, 30);
   assert.equal(s.voices.snare.plainVel, 85);
 });
+
+test("a multi-bar pattern repeats as a whole: two bars span eight beats per loop", () => {
+  const twoBar = { bars: 2, hits: [{ beat: 0, voice: "bassDrum" }, { beat: 4, voice: "snare" }, { beat: 7.5, voice: "crash" }] };
+  assert.equal(G.beatsPerLoop(twoBar), 8);
+  assert.equal(G.beatsPerLoop({ hits: [] }), 4);
+  const e = G.expandPattern(twoBar, 120, 4, 2);
+  assert.deepEqual(e.map((h) => h.beatAbs), [4, 8, 11.5, 12, 16, 19.5]);
+  assert.deepEqual(e.map((h) => h.bar), [0, 0, 0, 1, 1, 1]);
+});

@@ -5,7 +5,9 @@
 //  3. "until Stop" loop, stopped mid-bar, report covers completed loops only;
 //  4. a pad map saved under the old voice names migrates, and "Play pattern" (built-in sounds)
 //     performs every written note without taking input or producing a report;
-//  5. the metronome clicks on its own from bar 1, ignores input, and produces no report.
+//  5. the metronome clicks on its own from bar 1, ignores input, and produces no report;
+//  6. the editor builds a two-bar pattern, saves it under My patterns, plays it as a whole,
+//     survives a reload, exports as JSON, and deletes.
 // CHROMIUM_PATH points Playwright at an existing Chromium when its own is not installed.
 import { chromium } from "playwright";
 import { dirname, join } from "node:path";
@@ -163,6 +165,53 @@ console.log("scenario 5", JSON.stringify({ ...mid, ...after }));
 if (!mid.metronome || mid.countIn !== 0 || mid.totalBeats !== 8 || mid.expected !== 0) fail("scenario 5: metronome should run 2 bars from bar 1 with no written notes");
 if (mid.clicks < 3) fail("scenario 5: clicks should have been scheduled");
 if (mid.played !== 0 || after.summary !== null || !after.reportHidden || !after.startEnabled) fail("scenario 5: metronome must ignore input, produce no report, and re-enable Start");
+
+// ---- 6. pattern editor: two bars, save, play, reload, export, delete ----
+await page.click("#edNew");
+await page.fill("#edName", "Smoke two-bar");
+await page.selectOption("#edBars", "2");
+const cellCount = await page.locator("#edGrid button.cell").count();
+if (cellCount !== 10 * 32) fail("scenario 6: a two-bar grid should have 10 voices x 32 steps, got " + cellCount);
+const cell = (voice, step) => page.locator(`#edGrid button.cell[data-voice="${voice}"][data-step="${step}"]`);
+await cell("bassDrum", 0).click();            // plain
+await cell("snare", 8).click(); await cell("snare", 8).click();   // accent
+await cell("snare", 3).click(); await cell("snare", 3).click(); await cell("snare", 3).click(); // ghost
+await cell("hiHatOpen", 30).click();          // bar 2, "&" of 4
+await cell("crash", 16).click();              // bar 2 downbeat
+await page.fill('#edGrid input.stick[data-step="8"]', "r");
+const states = await page.evaluate(() => [...document.querySelectorAll('#edGrid button.cell[data-state]:not([data-state=""])')].map((b) => `${b.dataset.voice}@${b.dataset.step}=${b.dataset.state}`).sort());
+if (states.join() !== ["bassDrum@0=plain", "crash@16=plain", "hiHatOpen@30=plain", "snare@3=ghost", "snare@8=accent"].join()) fail("scenario 6: cell states wrong: " + states.join(" "));
+await page.click("#edSave");
+let status = await page.textContent("#edStatus");
+if (!/Saved "Smoke two-bar" \(5 notes, 2 bars\)/.test(status)) fail("scenario 6: save status was: " + status);
+const selected = await page.evaluate(() => { const s = document.getElementById("patternSel"); return { value: s.value, text: s.selectedOptions[0].textContent, group: s.selectedOptions[0].parentElement.label }; });
+if (!selected.value.startsWith("custom-") || selected.group !== "My patterns" || !/\(2 bars\)$/.test(selected.text)) fail("scenario 6: saved pattern should be selected under My patterns: " + JSON.stringify(selected));
+// Play it: 2 loops of a 2-bar pattern = 5 notes x 2, 16 beats after the count-in
+await page.uncheck("#loopForever");
+await page.fill("#bpm", "240");
+await page.fill("#loops", "2");
+await page.click("#playBtn");
+const runInfo = await page.evaluate(() => { const r = window.__drumTrainer.run; return { beatsPerLoop: r.beatsPerLoop, totalBeats: r.totalBeats, expected: r.expected.length, lastBeat: r.expected[r.expected.length - 1].beatAbs, label: r.expected.find((e) => e.voice === "snare" && e.accent)?.label }; });
+if (runInfo.beatsPerLoop !== 8 || runInfo.totalBeats !== 20 || runInfo.expected !== 10 || runInfo.lastBeat !== 4 + 8 + 7.5 || runInfo.label !== "R") fail("scenario 6: multi-bar run bookkeeping wrong: " + JSON.stringify(runInfo));
+await page.waitForTimeout(600);
+await page.screenshot({ path: join(shots, "editor.png"), fullPage: true });
+await finished();
+// Survives a reload, exports, deletes
+await page.reload();
+await page.waitForTimeout(400);
+const afterReload = await page.evaluate(() => [...document.querySelectorAll("#patternSel optgroup[label='My patterns'] option")].map((o) => o.textContent));
+if (afterReload.length !== 1 || !afterReload[0].startsWith("Smoke two-bar")) fail("scenario 6: custom pattern should persist across reload: " + afterReload.join());
+await page.click("#edLoad");
+const loaded = await page.evaluate(() => ({ name: document.getElementById("edName").value, bars: document.getElementById("edBars").value, ghost: document.querySelector('#edGrid button.cell[data-voice="snare"][data-step="3"]').dataset.state, stick: document.querySelector('#edGrid input.stick[data-step="8"]').value }));
+if (loaded.name !== "Smoke two-bar" || loaded.bars !== "2" || loaded.ghost !== "ghost" || loaded.stick !== "R") fail("scenario 6: loading the saved pattern back into the editor lost data: " + JSON.stringify(loaded));
+const [download] = await Promise.all([page.waitForEvent("download"), page.click("#edExport")]);
+const exported = JSON.parse(await (await import("node:fs/promises")).readFile(await download.path(), "utf8"));
+if (download.suggestedFilename() !== "drum-trainer-patterns.json" || exported.patterns?.length !== 1 || exported.patterns[0].bars !== 2) fail("scenario 6: export file wrong");
+await page.click("#edDelete");
+status = await page.textContent("#edStatus");
+const groupsLeft = await page.evaluate(() => document.querySelectorAll("#patternSel optgroup").length);
+if (!/Deleted "Smoke two-bar"/.test(status) || groupsLeft !== 1) fail("scenario 6: delete should remove the pattern and the My patterns group");
+console.log("scenario 6", JSON.stringify({ cellCount, states, selected: selected.text, runInfo, afterReload, exported: exported.patterns.length }));
 
 await browser.close();
 if (errors.length) { console.error("page errors:", errors); process.exitCode = 1; }
