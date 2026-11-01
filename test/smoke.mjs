@@ -2,7 +2,9 @@
 // Three scenarios, all fed through the page's real MIDI handler:
 //  1. finite run of an open-hat pattern by note number (46 open / 42 closed), one deliberate wrong hat;
 //  2. pedal mode: both hat voices mapped to note 42, open/closed decided by controller 4;
-//  3. "until Stop" loop, stopped mid-bar, report covers completed loops only.
+//  3. "until Stop" loop, stopped mid-bar, report covers completed loops only;
+//  4. a pad map saved under the old voice names migrates, and "Play pattern" (built-in sounds)
+//     performs every written note without taking input or producing a report.
 // CHROMIUM_PATH points Playwright at an existing Chromium when its own is not installed.
 import { chromium } from "playwright";
 import { dirname, join } from "node:path";
@@ -21,7 +23,7 @@ page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
 await page.goto("file://" + join(root, "dist/index.html"));
 await page.waitForTimeout(400);
 
-const NOTE = { kick: 36, snare: 38, hihatClosed: 42, hihatOpen: 46, hihatPedal: 44, ride: 51 };
+const NOTE = { bassDrum: 36, snare: 38, hiHatClosed: 42, hiHatOpen: 46, hiHatFoot: 44, ride: 51 };
 const fail = (msg) => { console.error("FAIL:", msg); process.exitCode = 1; };
 
 // Feed the current run's expected notes through onMidi with a fixed lag.
@@ -52,7 +54,7 @@ await page.fill("#loops", "2");
 await page.uncheck("#loopForever");
 await page.fill("#cal", "0");
 await page.click("#startBtn");
-await playExpected(10, (e) => (e.voice === "hihatOpen" && e.bar === 1 ? "hihatClosed" : null));
+await playExpected(10, (e) => (e.voice === "hiHatOpen" && e.bar === 1 ? "hiHatClosed" : null));
 await page.waitForTimeout(1500);
 await page.screenshot({ path: join(shots, "mid-run.png") });
 await finished();
@@ -60,12 +62,12 @@ let s = await summary();
 console.log("scenario 1", JSON.stringify({ accuracy: s.accuracy, counts: s.counts, extras: s.extras }));
 if (s.counts.miss !== 0 || s.extras !== 0) fail("scenario 1: unexpected misses/extras");
 if (s.counts.wrongVoice !== 1) fail("scenario 1: expected exactly one wrong-hat flag");
-if (s.voices.hihatOpen.hit !== 2) fail("scenario 1: open hats should both be hit");
+if (s.voices.hiHatOpen.hit !== 2) fail("scenario 1: open hats should both be hit");
 await page.screenshot({ path: join(shots, "report.png"), fullPage: true });
 
 // ---- 2. pedal mode (shared note 42, controller 4 decides) ----
 await page.evaluate(() => {
-  localStorage.setItem("drumTrainer.padMap", JSON.stringify({ hihatClosed: [42], hihatOpen: [42] }));
+  localStorage.setItem("drumTrainer.padMap", JSON.stringify({ hiHatClosed: [42], hiHatOpen: [42] }));
 });
 await page.reload();
 await page.waitForTimeout(400);
@@ -76,7 +78,7 @@ await page.fill("#bpm", "200");
 await page.fill("#loops", "1");
 await page.fill("#cal", "0");
 await page.click("#startBtn");
-await playExpected(10, (e) => (e.voice === "hihatOpen" ? "__pedal_open" : e.voice === "hihatClosed" ? "__pedal_closed" : null));
+await playExpected(10, (e) => (e.voice === "hiHatOpen" ? "__pedal_open" : e.voice === "hiHatClosed" ? "__pedal_closed" : null));
 await finished();
 s = await summary();
 console.log("scenario 2", JSON.stringify({ accuracy: s.accuracy, counts: s.counts, extras: s.extras, pedal: await page.textContent("#pedalState") }));
@@ -118,6 +120,31 @@ if (grown.generated < 5) fail("scenario 3: expected notes should have been gener
 if (loops !== 3) fail("scenario 3: report should cover the 3 completed loops, got " + loops);
 if (s.scored !== 3 * 12) fail("scenario 3: scored count should be 3 loops x 12 notes, got " + s.scored);
 if (s.counts.miss !== 0 || s.extras !== 0) fail("scenario 3: unexpected misses/extras");
+
+// ---- 4. legacy pad-map migration + playback mode ----
+await page.evaluate(() => localStorage.setItem("drumTrainer.padMap", JSON.stringify({ kick: [35], tom1: [50], hihatPedal: [44] })));
+await page.reload();
+await page.waitForTimeout(400);
+const mapText = await page.textContent("#mapGrid");
+if (!/Bass drum\s*notes 35/.test(mapText) || !/High tom\s*notes 50/.test(mapText)) fail("scenario 4: legacy pad-map keys should migrate to the standard voice names");
+await page.evaluate(() => localStorage.removeItem("drumTrainer.padMap"));
+await page.reload();
+await page.waitForTimeout(400);
+await page.selectOption("#patternSel", "funkghost");
+await page.uncheck("#loopForever");
+await page.fill("#bpm", "240");
+await page.fill("#loops", "2");
+await page.selectOption("#soundSel", "synth");
+await page.click("#playBtn");
+if (!(await page.isDisabled("#startBtn"))) fail("scenario 4: Start should be disabled while the pattern plays");
+await page.evaluate(() => window.__drumTrainer.recordHit("snare", 100, performance.now() + 1200)); // input must be ignored in playback
+await page.waitForTimeout(1800);
+await page.screenshot({ path: join(shots, "playback.png") });
+await finished();
+const demo = await page.evaluate(() => { const r = window.__drumTrainer.run; return { demo: r.demo, sounded: r.sounded, expected: r.expected.length, played: r.played.length, summary: r.summary, reportHidden: document.getElementById("report").hidden, counting: null }; });
+console.log("scenario 4", JSON.stringify(demo));
+if (!demo.demo || demo.sounded !== demo.expected || demo.expected === 0) fail("scenario 4: every written note should have been sounded");
+if (demo.played !== 0 || demo.summary !== null || !demo.reportHidden) fail("scenario 4: playback must ignore input and produce no report");
 
 await browser.close();
 if (errors.length) { console.error("page errors:", errors); process.exitCode = 1; }

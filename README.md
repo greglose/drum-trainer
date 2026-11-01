@@ -2,8 +2,10 @@
 
 Practice drum patterns on an electronic kit and get graded on timing, dynamics and
 hi-hat articulation. The kit's module plugs into the computer over USB, the page reads
-it with the browser's Web MIDI API, and a click plays while a pattern scrolls past a
-playhead. Every hit is scored against the nearest written note, live and in an end report.
+it with the browser's Web MIDI API, and a click plays while the pattern scrolls past a
+playhead on a drum staff. Every hit is scored against the nearest written note, live and
+in an end report. A Play button performs the pattern first, so you hear what it should
+sound like.
 
 One self-contained HTML file. No backend, no account, no install. Everything (pad map,
 tempo, latency offset) stays in the browser's local storage and nothing leaves the device.
@@ -17,17 +19,43 @@ once its pads are learned.
 2. Open the page in **Chrome or Edge** (the only browsers with Web MIDI) and allow MIDI when asked.
 3. Check the pad map at the bottom. The defaults are the Alesis Nitro factory note numbers.
    To relearn a pad, click its card and hit it.
-4. Pick a pattern, a tempo and a loop count (or "until Stop"), press Start. One bar of
-   count-in, then play along with the click.
-5. Run the **Calibration** pattern once and press "Use ... as latency offset" in the
+4. Pick a pattern and a tempo. **Play pattern** performs it at that tempo: through the
+   built-in sounds, or through the module's own sounds if you pick it under "Playback sound"
+   (the page sends it MIDI on channel 10).
+5. Set a loop count (or "until Stop") and press **Start**. One bar of count-in, then play
+   along with the click.
+6. Run the **Calibration** pattern once and press "Use ... as latency offset" in the
    report. That removes the module's and the USB chain's fixed delay from every later score.
 
-No kit handy? The keyboard stands in: space is the kick, J the snare, F closed hat,
-G open hat, D foot hat, R T Y the toms, U crash, I ride.
+No kit handy? The keyboard stands in: space is the bass drum, J the snare, F the closed
+hi-hat, G the open hi-hat, D the foot hi-hat, R T Y the high, mid and floor toms, U the
+crash, I the ride.
 
 **Windows:** only one program can hold a MIDI input port at a time. Close any drum
 software (BFD Player, a DAW) while the page is open, and listen to the module's own sounds.
 macOS shares the port, so both can run together.
+
+## Notation
+
+The staff follows the Percussive Arts Society's *Guide to Standardized Drumset Notation*
+(Norman Weinberg, 1998), the convention most method books and engravers use:
+
+| Voice | Staff position | Notehead |
+|---|---|---|
+| Crash cymbal | first ledger line above the staff | x |
+| Hi-hat (played with sticks) | space above the top line | x, with **o** above for open and **+** for closed |
+| Ride cymbal | top line | x |
+| High tom | fourth space | round |
+| Mid tom | fourth line | round |
+| Snare drum | third space | round |
+| Floor tom | second space | round |
+| Bass drum | first space | round |
+| Hi-hat (foot) | space below the bottom line | x |
+
+Accents are marked **>** above the note, ghost notes are drawn in parentheses, and stickings
+are R and L under the staff. Counts read **1 e & a** at sixteenth resolution, **1 & 2 &** at
+eighths. Rudiments use the PAS International Drum Rudiments names: Single Stroke Roll,
+Double Stroke Open Roll, Single Paradiddle.
 
 ## What is graded
 
@@ -41,21 +69,22 @@ macOS shares the port, so both can run together.
 
 - A hit is matched to the nearest unmatched written note of the same voice inside the window.
   Unmatched hits count as extras.
-- Hi-hat open and closed share a lane. A closed hat where an open one was written still
-  matches on time, but is flagged "wrong hat" and earns half credit. A foot chick is its own voice.
-- The report shows per-voice hit counts, mean offset (ahead of or behind the click), spread,
-  and the average velocity of accented versus plain notes.
-- In "until Stop" mode the live line adds a rolling "last 4 loops" figure; the report covers
-  completed loops only.
+- Open and closed hi-hat share a staff position. A closed hi-hat where an open one was written
+  still matches on time, but is flagged and earns half credit. The foot hi-hat is its own voice.
+- The report shows per-voice hit counts, mean offset (rushing or dragging), spread, and the
+  average velocity of accented, plain and ghost notes, so you can see whether your dynamics
+  separate.
+- In "until Stop" mode the live line adds a rolling "last 4 bars" figure; the report covers
+  completed bars only.
 
 ### Hi-hat open versus closed
 
 Two sources, chosen automatically:
 
-- **Note number.** Most modules send a different note for open (46) and closed (42) hats.
+- **Note number.** Most modules send a different note for open (46) and closed (42) hi-hat.
   This is the default.
-- **Pedal position.** If the module sends one note for both, learn "Hi-hat closed" and
-  "Hi-hat open" to that same note. The page then reads MIDI controller 4 from the pedal and
+- **Pedal position.** If the module sends one note for both, learn "Hi-hat (closed)" and
+  "Hi-hat (open)" to that same note. The page then reads MIDI controller 4 from the pedal and
   treats pressed (value 64 and above) as closed. The status line shows the live pedal value.
 
 ## Develop
@@ -64,18 +93,23 @@ Two sources, chosen automatically:
 npm install            # playwright, for the browser smoke test only
 npm test               # grader unit tests (node --test)
 npm run build          # writes dist/index.html
-npm run smoke          # headless Chromium: three scripted runs through the MIDI handler
+npm run smoke          # headless Chromium: scripted runs through the MIDI handler, plus playback
 ```
 
 - `src/grader.cjs` is the pure scoring engine: pattern expansion, hit matching, summaries.
   No DOM, no audio. Unit-tested in `test/grader.test.js`.
-- `src/app.html` is the page: MIDI input, pad learning, the Web Audio click, the lane view,
-  the report. `scripts/build.mjs` inlines the grader at the `/*GRADER*/` marker.
+- `src/app.html` is the page: MIDI input and output, pad learning, the Web Audio click and
+  built-in kit, the staff view, the report. `scripts/build.mjs` inlines the grader at the
+  `/*GRADER*/` marker.
 - Timing: MIDI events arrive with `performance.now()` timestamps; the click is scheduled on
   the Web Audio clock and the two are aligned through `AudioContext.getOutputTimestamp()`,
-  so hits are measured against what the player actually hears.
+  so hits are measured against what the player actually hears. Playback schedules the
+  written notes from the same clock, to the module with timestamped MIDI messages or to
+  the built-in synth.
+- Voices: `bassDrum`, `snare`, `hiHatClosed`, `hiHatOpen`, `hiHatFoot`, `highTom`, `midTom`,
+  `floorTom`, `crash`, `ride`. Pad maps saved under the older names migrate on load.
 - Add a pattern by adding an entry to `PATTERNS` in `src/app.html`: beats within a 4/4 bar,
-  a voice name, optional `accent` and sticking `label`.
+  a voice name, optional `accent`, `ghost` and sticking `label`.
 
 ## Deploy
 

@@ -22,6 +22,7 @@
   button.primary { background: var(--accent); color: #06202c; border-color: transparent; font-weight: 600; }
   button:disabled { opacity: .45; cursor: default; }
   .loopbox { display: flex; align-items: center; gap: 8px; }
+  .buttons { display: flex; gap: 8px; align-items: center; margin-bottom: 1px; }
   main { padding: 16px; display: grid; gap: 16px; grid-template-columns: 1fr; max-width: 1200px; margin: 0 auto; }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
   .panel h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
@@ -33,7 +34,7 @@
   #live .recent { color: var(--muted); font-size: 14px; }
   #live .recent b { color: var(--fg); font-size: 20px; }
   #feedback { font-size: 22px; font-weight: 700; }
-  .perfect { color: var(--perfect); } .good { color: var(--good); } .ok { color: var(--ok); } .late-ish { color: var(--late); } .miss { color: var(--miss); } .wrong { color: var(--wrong); }
+  .perfect { color: var(--perfect); } .good { color: var(--good); } .ok { color: var(--ok); } .late-ish { color: var(--late); } .miss { color: var(--miss); } .wrong { color: var(--wrong); } .demo { color: var(--accent); }
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
   th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
   th { color: var(--muted); font-weight: 600; }
@@ -52,7 +53,7 @@
   <h1>Drum Trainer</h1>
   <label>MIDI input <select id="midiSel"><option value="">(none found)</option></select></label>
   <label>Pattern <select id="patternSel"></select></label>
-  <label>BPM <input id="bpm" type="number" min="40" max="240" value="90" /></label>
+  <label>Tempo (quarter note = BPM) <input id="bpm" type="number" min="40" max="240" value="90" /></label>
   <label>Loops
     <span class="loopbox">
       <input id="loops" type="number" min="1" max="999" value="4" />
@@ -60,8 +61,12 @@
     </span>
   </label>
   <label>Latency offset (ms) <input id="cal" type="number" min="-200" max="200" value="0" /></label>
-  <button id="startBtn" class="primary">Start</button>
-  <button id="stopBtn" disabled>Stop</button>
+  <label>Playback sound <select id="soundSel"><option value="synth">Built-in sounds</option></select></label>
+  <span class="buttons">
+    <button id="playBtn" title="Hear the pattern played at this tempo">Play pattern</button>
+    <button id="startBtn" class="primary">Start</button>
+    <button id="stopBtn" disabled>Stop</button>
+  </span>
 </header>
 <main>
   <div class="panel">
@@ -71,13 +76,16 @@
       <span>hi-hat pedal: <b id="pedalState">no controller data yet</b></span>
       <span>open/closed from: <b id="hatMode">note number</b></span>
     </div>
-    <canvas id="lanes" width="1200" height="340"></canvas>
+    <canvas id="staff" width="1200" height="340"></canvas>
     <div id="live">
       <div class="big" id="liveAcc">–</div>
       <div class="recent" id="liveRecent"></div>
       <div id="feedback"></div>
       <div id="liveCounts" style="color:var(--muted);font-size:13px"></div>
     </div>
+    <p class="hint">Notation follows the Percussive Arts Society standard: cymbals are x noteheads, drums are round; bass drum sits in the first space,
+      snare in the third, toms above it, ride on the top line, hi-hat above the staff, crash on the ledger line, foot hi-hat below the staff.
+      <b>o</b> = open hi-hat, <b>+</b> = closed, <b>&gt;</b> = accent, ( ) = ghost note, R/L = sticking. Counts read 1 e &amp; a.</p>
   </div>
 
   <div class="panel" id="report" hidden>
@@ -90,8 +98,9 @@
     <div class="map-grid" id="mapGrid"></div>
     <p class="hint">Click a pad, then hit it on the kit to learn its MIDI note. Defaults are the Alesis Nitro factory map.
       Hi-hat open vs closed: if the module sends different note numbers (46 open, 42 closed), those are used. If it sends one note for both,
-      learn both "Hi-hat closed" and "Hi-hat open" to that same note and the pedal position (controller 4) decides instead: pressed = closed.</p>
-    <p class="hint">No kit handy? Keyboard: <kbd>space</kbd> kick, <kbd>J</kbd> snare, <kbd>F</kbd> closed hat, <kbd>G</kbd> open hat, <kbd>D</kbd> foot hat, <kbd>R</kbd> <kbd>T</kbd> <kbd>Y</kbd> toms, <kbd>U</kbd> crash, <kbd>I</kbd> ride.</p>
+      learn both "Hi-hat (closed)" and "Hi-hat (open)" to that same note and the pedal position (controller 4) decides instead: pressed = closed.</p>
+    <p class="hint">No kit handy? Keyboard: <kbd>space</kbd> bass drum, <kbd>J</kbd> snare, <kbd>F</kbd> closed hi-hat, <kbd>G</kbd> open hi-hat, <kbd>D</kbd> foot hi-hat, <kbd>R</kbd> high tom, <kbd>T</kbd> mid tom, <kbd>Y</kbd> floor tom, <kbd>U</kbd> crash, <kbd>I</kbd> ride.</p>
+    <p class="hint">"Play pattern" performs the pattern at the chosen tempo. Pick the module under Playback sound to hear it on the kit's own sounds (the page sends it MIDI), or leave Built-in sounds.</p>
     <p class="hint" id="browserHint"></p>
     <p class="hint">Free and open source (MIT). Everything stays in this browser; nothing is sent anywhere. <a href="https://github.com/greglose/drum-trainer">Source on GitHub</a>.</p>
   </div>
@@ -103,38 +112,46 @@
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
-  const VOICES = ["kick", "snare", "hihatClosed", "hihatOpen", "hihatPedal", "tom1", "tom2", "tom3", "crash", "ride"];
-  const VOICE_LABEL = { kick: "Kick", snare: "Snare", hihatClosed: "Hi-hat closed", hihatOpen: "Hi-hat open", hihatPedal: "Hi-hat foot", tom1: "Tom 1", tom2: "Tom 2", tom3: "Floor tom", crash: "Crash", ride: "Ride" };
-  const LANE_LABEL = { hihat: "Hi-hat", hihatPedal: "Hi-hat foot" };
-  const laneLabel = (fam) => LANE_LABEL[fam] || VOICE_LABEL[fam];
-  // Alesis Nitro factory map (head + rim/bow + bell where the pad has them).
-  const DEFAULT_MAP = { kick: [36], snare: [38, 40], hihatClosed: [42], hihatOpen: [46], hihatPedal: [44], tom1: [48, 50], tom2: [45, 47], tom3: [43, 58], crash: [49, 55], ride: [51, 53, 59] };
-  const KEYS = { " ": "kick", j: "snare", f: "hihatClosed", g: "hihatOpen", d: "hihatPedal", r: "tom1", t: "tom2", y: "tom3", u: "crash", i: "ride" };
+  // Voice names and staff positions per the Percussive Arts Society standardized drumset notation
+  // (Weinberg, 1998). Position 0 is the bottom line of the staff; each step is a line or space.
+  const VOICES = ["bassDrum", "snare", "hiHatClosed", "hiHatOpen", "hiHatFoot", "highTom", "midTom", "floorTom", "crash", "ride"];
+  const VOICE_LABEL = { bassDrum: "Bass drum", snare: "Snare drum", hiHatClosed: "Hi-hat (closed)", hiHatOpen: "Hi-hat (open)", hiHatFoot: "Hi-hat (foot)", highTom: "High tom", midTom: "Mid tom", floorTom: "Floor tom", crash: "Crash cymbal", ride: "Ride cymbal" };
+  const STAFF_POS = { crash: 10, hiHat: 9, ride: 8, highTom: 7, midTom: 6, snare: 5, floorTom: 3, bassDrum: 1, hiHatFoot: -1 }; // keyed by family
+  const STAFF_LABEL = { crash: "Crash", hiHat: "Hi-hat", ride: "Ride", highTom: "High tom", midTom: "Mid tom", snare: "Snare", floorTom: "Floor tom", bassDrum: "Bass drum", hiHatFoot: "Hi-hat (foot)" };
+  const CYMBALS = new Set(["crash", "hiHatClosed", "hiHatOpen", "hiHatFoot", "ride"]);
+  // Alesis Nitro factory map (head + rim/bow + bell where the pad has them). First note is used for playback.
+  const DEFAULT_MAP = { bassDrum: [36], snare: [38, 40], hiHatClosed: [42], hiHatOpen: [46], hiHatFoot: [44], highTom: [48, 50], midTom: [45, 47], floorTom: [43, 58], crash: [49, 55], ride: [51, 53, 59] };
+  const LEGACY_KEYS = { kick: "bassDrum", hihatClosed: "hiHatClosed", hihatOpen: "hiHatOpen", hihatPedal: "hiHatFoot", tom1: "highTom", tom2: "midTom", tom3: "floorTom" };
+  const KEYS = { " ": "bassDrum", j: "snare", f: "hiHatClosed", g: "hiHatOpen", d: "hiHatFoot", r: "highTom", t: "midTom", y: "floorTom", u: "crash", i: "ride" };
   const WINDOW_MS = 100;
   const COUNT_IN_BEATS = 4;
   const PEDAL_CC = 4;            // MIDI "foot controller": 127 = pedal fully down (closed), 0 = open
   const PEDAL_OPEN_BELOW = 64;
   const LOOKAHEAD_BEATS = 12;    // how far ahead expected notes are generated in "until Stop" mode
   const RECENT_BARS = 4;
+  const DEMO_VELOCITY = { accent: 115, ghost: 35, plain: 85 };
 
+  // Patterns: beats are 0-based within a 4/4 bar. Rudiment names and stickings follow the PAS International Drum Rudiments.
   const eighths = (voice) => [0, .5, 1, 1.5, 2, 2.5, 3, 3.5].map((beat) => ({ beat, voice }));
   const sixteenths = (voice, accentEvery) => Array.from({ length: 16 }, (_, i) => ({ beat: i / 4, voice, accent: accentEvery ? i % accentEvery === 0 : false }));
-  const hatsWithOpenOn = (openBeats) => eighths("hihatClosed").map((h) => (openBeats.includes(h.beat) ? { ...h, voice: "hihatOpen" } : h));
+  const hatsWithOpenOn = (openBeats) => eighths("hiHatClosed").map((h) => (openBeats.includes(h.beat) ? { ...h, voice: "hiHatOpen" } : h));
   const backbeat = [{ beat: 1, voice: "snare", accent: true }, { beat: 3, voice: "snare", accent: true }];
+  const bd = (...beats) => beats.map((beat) => ({ beat, voice: "bassDrum" }));
   const PATTERNS = [
-    { id: "cal", name: "Calibration: quarter notes on snare", hits: [0, 1, 2, 3].map((beat) => ({ beat, voice: "snare" })) },
-    { id: "rock8", name: "Basic rock beat (8th-note hi-hat)", hits: [...eighths("hihatClosed"), { beat: 0, voice: "kick" }, { beat: 2, voice: "kick" }, ...backbeat] },
-    { id: "rock8b", name: "Rock beat, kick on 1, 2&, 3", hits: [...eighths("hihatClosed"), { beat: 0, voice: "kick" }, { beat: 1.5, voice: "kick" }, { beat: 2, voice: "kick" }, ...backbeat] },
-    { id: "rock8open", name: "Rock beat, open hat on the & of 4", hits: [...hatsWithOpenOn([3.5]), { beat: 0, voice: "kick" }, { beat: 2, voice: "kick" }, ...backbeat] },
-    { id: "rock8open2", name: "Rock beat, open hats on & of 2 and & of 4", hits: [...hatsWithOpenOn([1.5, 3.5]), { beat: 0, voice: "kick" }, { beat: 2, voice: "kick" }, { beat: 2.5, voice: "kick" }, ...backbeat] },
-    { id: "disco", name: "Disco: open hat on every &, four on the floor", hits: [...hatsWithOpenOn([.5, 1.5, 2.5, 3.5]), ...[0, 1, 2, 3].map((beat) => ({ beat, voice: "kick" })), ...backbeat] },
-    { id: "rock16", name: "Rock beat (16th-note hi-hat)", hits: [...sixteenths("hihatClosed"), { beat: 0, voice: "kick" }, { beat: 2, voice: "kick" }, { beat: 2.75, voice: "kick" }, ...backbeat] },
-    { id: "ridefoot", name: "Ride 8ths, foot hi-hat on 2 and 4", hits: [...eighths("ride"), { beat: 1, voice: "hihatPedal" }, { beat: 3, voice: "hihatPedal" }, { beat: 0, voice: "kick" }, { beat: 2, voice: "kick" }, ...backbeat] },
-    { id: "single8", name: "Single strokes, 8ths on snare", hits: eighths("snare").map((h, i) => ({ ...h, label: i % 2 ? "L" : "R" })) },
-    { id: "single16", name: "Single strokes, 16ths on snare (accent the beat)", hits: sixteenths("snare", 4).map((h, i) => ({ ...h, label: i % 2 ? "L" : "R" })) },
-    { id: "paradiddle", name: "Paradiddle, 16ths (RLRR LRLL)", hits: sixteenths("snare", 4).map((h, i) => ({ ...h, label: "RLRRLRLL"[i % 8] })) },
-    { id: "double", name: "Double strokes, 16ths (RRLL)", hits: sixteenths("snare", 4).map((h, i) => ({ ...h, label: "RRLL"[i % 4] })) },
-    { id: "tomsround", name: "8ths around the toms", hits: [{ beat: 0, voice: "snare" }, { beat: .5, voice: "snare" }, { beat: 1, voice: "tom1" }, { beat: 1.5, voice: "tom1" }, { beat: 2, voice: "tom2" }, { beat: 2.5, voice: "tom2" }, { beat: 3, voice: "tom3" }, { beat: 3.5, voice: "tom3" }] },
+    { id: "cal", name: "Calibration: quarter notes on snare drum", hits: [0, 1, 2, 3].map((beat) => ({ beat, voice: "snare" })) },
+    { id: "rock8", name: "Rock groove, 8th-note hi-hat", hits: [...eighths("hiHatClosed"), ...bd(0, 2), ...backbeat] },
+    { id: "rock8b", name: "Rock groove, bass drum on 1, & of 2, 3", hits: [...eighths("hiHatClosed"), ...bd(0, 1.5, 2), ...backbeat] },
+    { id: "rock8open", name: "Rock groove, open hi-hat on the & of 4", hits: [...hatsWithOpenOn([3.5]), ...bd(0, 2), ...backbeat] },
+    { id: "rock8open2", name: "Rock groove, open hi-hat on the & of 2 and & of 4", hits: [...hatsWithOpenOn([1.5, 3.5]), ...bd(0, 2, 2.5), ...backbeat] },
+    { id: "disco", name: "Disco groove: four on the floor, open hi-hat on every &", hits: [...hatsWithOpenOn([.5, 1.5, 2.5, 3.5]), ...bd(0, 1, 2, 3), ...backbeat] },
+    { id: "rock16", name: "Rock groove, 16th-note hi-hat", hits: [...sixteenths("hiHatClosed"), ...bd(0, 2, 2.75), ...backbeat] },
+    { id: "funkghost", name: "Funk groove with ghost notes (a of 1, e of 3)", hits: [...eighths("hiHatClosed"), ...bd(0, 1.5, 2.5), ...backbeat, { beat: .75, voice: "snare", ghost: true }, { beat: 2.25, voice: "snare", ghost: true }] },
+    { id: "ridefoot", name: "Ride groove, hi-hat with foot on 2 and 4", hits: [...eighths("ride"), { beat: 1, voice: "hiHatFoot" }, { beat: 3, voice: "hiHatFoot" }, ...bd(0, 2), ...backbeat] },
+    { id: "single8", name: "Single Stroke Roll, 8th notes", hits: eighths("snare").map((h, i) => ({ ...h, label: i % 2 ? "L" : "R" })) },
+    { id: "single16", name: "Single Stroke Roll, 16th notes, accent on each beat", hits: sixteenths("snare", 4).map((h, i) => ({ ...h, label: i % 2 ? "L" : "R" })) },
+    { id: "paradiddle", name: "Single Paradiddle, 16th notes (RLRR LRLL)", hits: sixteenths("snare", 4).map((h, i) => ({ ...h, label: "RLRRLRLL"[i % 8] })) },
+    { id: "double", name: "Double Stroke Open Roll, 16th notes (RRLL)", hits: sixteenths("snare", 4).map((h, i) => ({ ...h, label: "RRLL"[i % 4] })) },
+    { id: "tomsround", name: "8th notes around the kit: snare, high tom, mid tom, floor tom", hits: [{ beat: 0, voice: "snare" }, { beat: .5, voice: "snare" }, { beat: 1, voice: "highTom" }, { beat: 1.5, voice: "highTom" }, { beat: 2, voice: "midTom" }, { beat: 2.5, voice: "midTom" }, { beat: 3, voice: "floorTom" }, { beat: 3.5, voice: "floorTom" }] },
   ];
 
   // ---------- state ----------
@@ -144,13 +161,16 @@
   let currentInput = null;
   let learning = null;   // voice being learned
   let pedalCC = null;    // last controller-4 value, null until the module sends one
-  let run = null;        // active or finished run
+  let run = null;        // active or finished run (practice or playback)
 
   function loadMap() {
     const map = structuredClone(DEFAULT_MAP);
     try {
       const raw = localStorage.getItem("drumTrainer.padMap");
-      if (raw) for (const [k, v] of Object.entries(JSON.parse(raw))) if (k in map && Array.isArray(v)) map[k] = v;
+      if (raw) for (const [k0, v] of Object.entries(JSON.parse(raw))) {
+        const k = LEGACY_KEYS[k0] || k0;
+        if (k in map && Array.isArray(v)) map[k] = v;
+      }
     } catch {}
     return map;
   }
@@ -162,9 +182,9 @@
     for (const [voice, notes] of Object.entries(map)) for (const n of notes) if (!m.has(n)) m.set(n, voice);
     return m;
   }
-  // Open/closed comes from the pedal controller when the two hat voices share a note.
+  // Open/closed comes from the pedal controller when the two hi-hat voices share a note.
   function hatFromPedal() {
-    return padMap.hihatClosed.some((n) => padMap.hihatOpen.includes(n));
+    return padMap.hiHatClosed.some((n) => padMap.hiHatOpen.includes(n));
   }
   function loadNumber(key, fallback) {
     try { const v = localStorage.getItem(key); return v === null ? fallback : Number(v); } catch { return fallback; }
@@ -201,8 +221,9 @@
       $("midiState").textContent = "permission denied (" + e.message + ")";
       return;
     }
-    midiAccess.onstatechange = refreshInputs;
+    midiAccess.onstatechange = () => { refreshInputs(); refreshOutputs(); };
     refreshInputs();
+    refreshOutputs();
   }
   function refreshInputs() {
     const sel = $("midiSel");
@@ -224,6 +245,18 @@
     const pick = inputs.find((i) => i.id === prev) || inputs.find((i) => /alesis|nitro/i.test(i.name)) || inputs[0];
     sel.value = pick.id;
     attachInput(pick);
+  }
+  function refreshOutputs() {
+    const sel = $("soundSel");
+    const prev = sel.value;
+    sel.innerHTML = '<option value="synth">Built-in sounds</option>';
+    for (const out of midiAccess.outputs.values()) {
+      const o = document.createElement("option");
+      o.value = out.id;
+      o.textContent = "MIDI: " + out.name;
+      sel.appendChild(o);
+    }
+    sel.value = [...sel.options].some((o) => o.value === prev) ? prev : "synth";
   }
   function attachInput(inp) {
     if (currentInput) currentInput.onmidimessage = null;
@@ -248,13 +281,13 @@
     }
     let voice = noteToVoice.get(d1);
     if (!voice) return;
-    if ((voice === "hihatClosed" || voice === "hihatOpen") && hatFromPedal() && pedalCC !== null) {
-      voice = pedalCC < PEDAL_OPEN_BELOW ? "hihatOpen" : "hihatClosed";
+    if ((voice === "hiHatClosed" || voice === "hiHatOpen") && hatFromPedal() && pedalCC !== null) {
+      voice = pedalCC < PEDAL_OPEN_BELOW ? "hiHatOpen" : "hiHatClosed";
     }
     recordHit(voice, d2, ev.timeStamp || performance.now());
   }
   function learnNote(note) {
-    const twin = { hihatClosed: "hihatOpen", hihatOpen: "hihatClosed" }[learning];
+    const twin = { hiHatClosed: "hiHatOpen", hiHatOpen: "hiHatClosed" }[learning];
     for (const v of VOICES) if (v !== twin) padMap[v] = padMap[v].filter((n) => n !== note);
     padMap[learning].push(note);
     padMap[learning].sort((a, b) => a - b);
@@ -272,8 +305,9 @@
     recordHit(voice, 100, performance.now());
   });
 
-  // ---------- audio clock + metronome ----------
+  // ---------- audio clock, metronome, built-in drum sounds ----------
   let ctx = null;
+  let noiseBuf = null;
   function ensureCtx() {
     if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (ctx.state === "suspended") ctx.resume();
@@ -289,20 +323,75 @@
     osc.start(atCtxTime);
     osc.stop(atCtxTime + 0.05);
   }
+  function noiseSource() {
+    if (!noiseBuf) {
+      noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const s = ctx.createBufferSource();
+    s.buffer = noiseBuf;
+    return s;
+  }
+  // Simple synthesized kit, good enough to hear where the notes fall and how loud they are.
+  function synthVoice(voice, velocity, t) {
+    const vel = Math.max(0.05, velocity / 127);
+    const out = ctx.createGain();
+    out.connect(ctx.destination);
+    const env = (g, peak, decay) => { g.gain.setValueAtTime(peak * vel, t); g.gain.exponentialRampToValueAtTime(0.001, t + decay); };
+    const tone = (type, f0, f1, decay, level) => {
+      const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t);
+      if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + decay * 0.6);
+      const g = ctx.createGain(); env(g, level, decay);
+      o.connect(g).connect(out); o.start(t); o.stop(t + decay + 0.02);
+    };
+    const hiss = (filterType, freq, decay, level, q) => {
+      const s = noiseSource(); const f = ctx.createBiquadFilter(); f.type = filterType; f.frequency.value = freq; if (q) f.Q.value = q;
+      const g = ctx.createGain(); env(g, level, decay);
+      s.connect(f).connect(g).connect(out); s.start(t); s.stop(t + decay + 0.02);
+    };
+    switch (voice) {
+      case "bassDrum": tone("sine", 160, 45, 0.3, 1.0); break;
+      case "snare": tone("triangle", 220, 160, 0.12, 0.5); hiss("bandpass", 2200, 0.18, 0.8, 0.8); break;
+      case "hiHatClosed": hiss("highpass", 7000, 0.06, 0.5); break;
+      case "hiHatOpen": hiss("highpass", 6500, 0.4, 0.5); break;
+      case "hiHatFoot": hiss("highpass", 8000, 0.04, 0.3); break;
+      case "highTom": tone("sine", 260, 170, 0.3, 0.8); break;
+      case "midTom": tone("sine", 190, 120, 0.35, 0.8); break;
+      case "floorTom": tone("sine", 130, 80, 0.45, 0.9); break;
+      case "crash": hiss("highpass", 4500, 1.4, 0.6); break;
+      case "ride": hiss("bandpass", 6000, 0.9, 0.35, 1.5); tone("sine", 2400, 0, 0.5, 0.15); break;
+    }
+  }
+  // Play one written note: through the module (MIDI channel 10) or the built-in kit.
+  function playNote(e) {
+    const velocity = e.accent ? DEMO_VELOCITY.accent : e.ghost ? DEMO_VELOCITY.ghost : DEMO_VELOCITY.plain;
+    const out = run.midiOut;
+    if (out) {
+      const note = (padMap[e.voice] || [])[0];
+      if (note === undefined) return;
+      const at = run.songStartPerf + e.ms;
+      out.send([0x99, note, velocity], at);
+      out.send([0x89, note, 0], at + 80);
+    } else {
+      synthVoice(e.voice, velocity, run.songStartCtx + e.ms / 1000);
+    }
+  }
 
-  // ---------- run lifecycle ----------
-  function startRun() {
+  // ---------- run lifecycle (practice run, or playback of the written pattern) ----------
+  function startRun({ demo = false } = {}) {
     ensureCtx();
     const pattern = PATTERNS.find((p) => p.id === $("patternSel").value) || PATTERNS[0];
     const bpm = Math.min(240, Math.max(40, Number($("bpm").value) || 90));
     const forever = $("loopForever").checked;
     const loops = forever ? Infinity : Math.min(999, Math.max(1, Number($("loops").value) || 4));
-    const calibrationMs = Number($("cal").value) || 0;
-    saveNumber("drumTrainer.bpm", bpm); saveNumber("drumTrainer.cal", calibrationMs);
+    const calibrationMs = demo ? 0 : Number($("cal").value) || 0;
+    saveNumber("drumTrainer.bpm", bpm); saveNumber("drumTrainer.cal", $("cal").value);
     saveNumber("drumTrainer.loops", $("loops").value); saveNumber("drumTrainer.forever", forever ? 1 : 0);
     const msPerBeat = 60000 / bpm;
     const beatsPerBar = pattern.beatsPerBar || 4;
     const totalBeats = forever ? Infinity : COUNT_IN_BEATS + loops * beatsPerBar;
+    const midiOut = demo && $("soundSel").value !== "synth" && midiAccess ? midiAccess.outputs.get($("soundSel").value) || null : null;
 
     // Align the audio clock to performance.now(), in the "what you hear" domain.
     const ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
@@ -313,19 +402,21 @@
 
     run = {
       pattern, bpm, loops, forever, calibrationMs, msPerBeat, beatsPerBar, totalBeats,
-      songStartCtx, songStartPerf,
+      songStartCtx, songStartPerf, demo, midiOut,
       expected: [], generatedLoops: 0,
       played: [], matches: new Map(), extras: [],
-      nextClickBeat: 0,
+      nextClickBeat: 0, nextSoundIdx: 0, sounded: 0,
       active: true, endMs: null, summary: null,
     };
     ensureExpected(forever ? LOOKAHEAD_BEATS : Infinity);
     $("report").hidden = true;
-    $("startBtn").disabled = true; $("stopBtn").disabled = false;
-    $("feedback").textContent = ""; $("liveRecent").textContent = "";
-    run.schedulerId = setInterval(scheduleClicks, 25);
-    scheduleClicks();
-    if (!forever) run.endTimer = setTimeout(finishRun, (totalBeats * msPerBeat) + WINDOW_MS + 300);
+    $("startBtn").disabled = true; $("playBtn").disabled = true; $("stopBtn").disabled = false;
+    $("feedback").textContent = ""; $("liveRecent").textContent = ""; $("liveCounts").textContent = "";
+    $("liveAcc").textContent = demo ? "listen" : "–";
+    if (demo) { $("feedback").className = "demo"; $("feedback").textContent = midiOut ? "playing on " + midiOut.name : "playing"; }
+    run.schedulerId = setInterval(scheduleAhead, 25);
+    scheduleAhead();
+    if (!forever) run.endTimer = setTimeout(finishRun, (totalBeats * msPerBeat) + (demo ? 700 : WINDOW_MS + 300));
     requestAnimationFrame(draw);
   }
   // Make sure expected notes exist up to `uptoBeat` (all loops when finite).
@@ -336,16 +427,24 @@
       run.generatedLoops = want;
     }
   }
-  function scheduleClicks() {
+  // Lookahead scheduler: clicks for every run, the written notes too when playing the pattern.
+  function scheduleAhead() {
     if (!run || !run.active) return;
     const horizon = ctx.currentTime + 0.15;
+    if (run.forever) ensureExpected(songNowMs() / run.msPerBeat + LOOKAHEAD_BEATS);
     while (run.nextClickBeat < run.totalBeats) {
       const t = run.songStartCtx + (run.nextClickBeat * run.msPerBeat) / 1000;
       if (t > horizon) break;
       click(t, run.nextClickBeat % run.beatsPerBar === 0);
       run.nextClickBeat++;
     }
-    if (run.forever) ensureExpected(songNowMs() / run.msPerBeat + LOOKAHEAD_BEATS);
+    if (run.demo) {
+      const horizonMs = (horizon - run.songStartCtx) * 1000;
+      while (run.nextSoundIdx < run.expected.length && run.expected[run.nextSoundIdx].ms <= horizonMs) {
+        playNote(run.expected[run.nextSoundIdx++]);
+        run.sounded++;
+      }
+    }
   }
   function stopRun() {
     if (!run || !run.active) return;
@@ -357,7 +456,13 @@
     run.endMs = songNowMs();
     run.active = false;
     clearInterval(run.schedulerId);
-    $("startBtn").disabled = false; $("stopBtn").disabled = true;
+    $("startBtn").disabled = false; $("playBtn").disabled = false; $("stopBtn").disabled = true;
+    if (run.demo) {
+      $("feedback").textContent = "";
+      $("liveAcc").textContent = "–";
+      requestAnimationFrame(draw);
+      return;
+    }
     if (run.forever) {
       // Score completed loops only; the partial loop at Stop and notes generated ahead are dropped.
       const playedLoops = Math.max(0, Math.floor((run.endMs / run.msPerBeat - COUNT_IN_BEATS) / run.beatsPerBar));
@@ -370,7 +475,7 @@
   }
   const result = () => ({ matches: run.matches, extras: run.extras, expected: run.expected });
   function recordHit(voice, velocity, perfTime) {
-    if (!run || !run.active) return;
+    if (!run || !run.active || run.demo) return;
     const ms = perfTime - run.songStartPerf;
     if (ms < 0) return;
     const p = { ms, voice, velocity };
@@ -380,17 +485,30 @@
     if (m) {
       const dt = Math.round(m.dtMs);
       fb = { cls: m.wrongVoice ? "wrong" : m.tier.name, text: `${m.tier.name} ${dt > 0 ? "+" : ""}${dt} ms` };
-      if (m.wrongVoice) fb.text += ` · wanted ${VOICE_LABEL[m.expected.voice].toLowerCase()}`;
+      if (m.wrongVoice) fb.text += ` · written ${VOICE_LABEL[m.expected.voice].toLowerCase()}`;
     } else if (ms - run.calibrationMs >= COUNT_IN_BEATS * run.msPerBeat - WINDOW_MS) {
       fb = { cls: "miss", text: "extra hit" };
     }
     if (fb) { $("feedback").className = fb.cls; $("feedback").textContent = fb.text; }
   }
 
-  // ---------- drawing ----------
-  const canvas = $("lanes");
+  // ---------- staff drawing ----------
+  const canvas = $("staff");
   const g = canvas.getContext("2d");
-  const COLORS = { perfect: "#4ade80", good: "#a3e635", ok: "#fbbf24", "late-ish": "#fb923c", miss: "#f87171", wrong: "#c084fc" };
+  const COLORS = { perfect: "#4ade80", good: "#a3e635", ok: "#fbbf24", "late-ish": "#fb923c", miss: "#f87171", wrong: "#c084fc", demo: "#4fc3f7", idle: "#8b94a3", line: "#3a4250" };
+  const STEP = 11;          // half a staff space
+  const Y0 = 206;           // y of the bottom staff line (position 0)
+  const X0 = 112;           // left edge of the time area; voice names sit to its left
+  const yPos = (pos) => Y0 - pos * STEP;
+  const SYLLABLES = { 1: [""], 2: ["", "&"], 4: ["", "e", "&", "a"] };
+  function subdivisionOf(pattern) {
+    let sub = 1;
+    for (const h of pattern.hits) {
+      if (h.beat % 1 === 0) continue;
+      sub = Math.max(sub, (h.beat * 2) % 1 === 0 ? 2 : 4);
+    }
+    return sub;
+  }
   function songNowMs() {
     if (!run) return 0;
     if (!run.active) return run.endMs ?? 0;
@@ -398,124 +516,165 @@
     if (ts && ts.contextTime > 0) return (ts.contextTime - run.songStartCtx) * 1000;
     return (ctx.currentTime - run.songStartCtx) * 1000;
   }
+  function drawStaff(W, families) {
+    g.strokeStyle = COLORS.line; g.lineWidth = 1;
+    for (const pos of [0, 2, 4, 6, 8]) { g.beginPath(); g.moveTo(X0, yPos(pos) + 0.5); g.lineTo(W, yPos(pos) + 0.5); g.stroke(); }
+    g.fillStyle = COLORS.idle; g.font = "13px system-ui"; g.textAlign = "right";
+    for (const fam of families) g.fillText(STAFF_LABEL[fam], X0 - 10, yPos(STAFF_POS[fam]) + 4);
+    g.textAlign = "left";
+  }
+  function notehead(x, y, voice, mode, color, small) {
+    const cymbal = CYMBALS.has(voice);
+    const s = small ? 4.5 : 5.5;
+    g.strokeStyle = color; g.fillStyle = color;
+    if (cymbal) {
+      g.lineWidth = mode === "hollow" ? 1.8 : 3;
+      g.beginPath(); g.moveTo(x - s, y - s); g.lineTo(x + s, y + s); g.moveTo(x + s, y - s); g.lineTo(x - s, y + s); g.stroke();
+      if (mode === "missed") { g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, s + 4, 0, Math.PI * 2); g.stroke(); }
+    } else {
+      g.lineWidth = 1.8;
+      g.beginPath(); g.ellipse(x, y, s + 1.2, s - 0.6, -0.3, 0, Math.PI * 2);
+      if (mode === "hollow" || mode === "missed") g.stroke(); else g.fill();
+      if (mode === "missed") { g.lineWidth = 2; g.beginPath(); g.moveTo(x - 8, y + 6); g.lineTo(x + 8, y - 6); g.stroke(); }
+    }
+  }
   function draw() {
     const W = canvas.width, H = canvas.height;
     g.clearRect(0, 0, W, H);
+    g.textAlign = "left";
     if (!run) { idleScreen(); return; }
     const nowMs = songNowMs();
     const nowBeat = nowMs / run.msPerBeat;
-    const lanes = [...new Set(run.pattern.hits.map((h) => Grader.familyOf(h.voice)))];
-    const laneH = (H - 40) / lanes.length;
+    const families = [...new Set(run.pattern.hits.map((h) => Grader.familyOf(h.voice)))].sort((a, b) => STAFF_POS[b] - STAFF_POS[a]);
     const viewBeats = 8;
-    const playheadX = W * 0.3;
-    const pxPerBeat = (W - 40) / viewBeats;
+    const playheadX = X0 + (W - X0) * 0.28;
+    const pxPerBeat = (W - X0 - 30) / viewBeats;
     const xFor = (beat) => playheadX + (beat - nowBeat) * pxPerBeat;
-    const yFor = (voice) => 20 + laneH * lanes.indexOf(Grader.familyOf(voice)) + laneH / 2;
     const bpb = run.beatsPerBar;
+    const sub = subdivisionOf(run.pattern);
 
-    // Beat grid
+    // Header: time signature, tempo, loop labels, beat counter
+    g.fillStyle = COLORS.idle; g.font = "13px system-ui";
+    g.fillText(`${bpb}/4 · quarter note = ${run.bpm}` + (run.demo ? " · playback" : ""), 8, 22);
+    g.fillStyle = "#e8ebf0"; g.font = "bold 28px system-ui"; g.textAlign = "right";
+    g.fillText(String(((Math.floor(nowBeat) % bpb) + bpb) % bpb + 1), W - 12, 32);
+    g.textAlign = "left";
+
+    // Bar lines, beat lines, subdivision ticks and counting
     g.font = "12px system-ui";
-    for (let b = Math.floor(nowBeat - 3); b <= nowBeat + viewBeats; b++) {
-      if (b < 0 || b > run.totalBeats) continue;
+    const firstBeat = Math.max(0, Math.floor(nowBeat - 3));
+    for (let b = firstBeat; b <= nowBeat + viewBeats && b <= run.totalBeats; b++) {
       const x = xFor(b);
+      if (x < X0) continue;
       const bar = b % bpb === 0;
-      g.strokeStyle = bar ? "#3a4250" : "#232830";
-      g.lineWidth = bar ? 2 : 1;
-      g.beginPath(); g.moveTo(x, 20); g.lineTo(x, H - 20); g.stroke();
+      g.strokeStyle = bar ? "#55607a" : "#232830"; g.lineWidth = bar ? 2 : 1;
+      g.beginPath(); g.moveTo(x, yPos(8)); g.lineTo(x, yPos(0)); g.stroke();
       if (bar) {
-        g.fillStyle = "#8b94a3";
+        g.fillStyle = COLORS.idle; g.font = "12px system-ui";
         const loopNo = (b - COUNT_IN_BEATS) / bpb + 1;
-        g.fillText(b < COUNT_IN_BEATS ? "count-in" : (run.forever || loopNo <= run.loops ? "loop " + loopNo + (run.forever ? "" : "/" + run.loops) : "end"), x + 4, 14);
+        g.fillText(b < COUNT_IN_BEATS ? "count-in" : (run.forever || loopNo <= run.loops ? "bar " + loopNo + (run.forever ? "" : " of " + run.loops) : "end"), x + 4, yPos(10) - 26);
+      }
+      for (let s = 0; s < sub; s++) {
+        const sx = xFor(b + s / sub);
+        if (sx < X0 || b + s / sub >= run.totalBeats) continue;
+        if (s > 0) { g.strokeStyle = "#232830"; g.lineWidth = 1; g.beginPath(); g.moveTo(sx, yPos(0) + 2); g.lineTo(sx, yPos(0) + 8); g.stroke(); }
+        g.fillStyle = s === 0 ? "#c9d1dc" : COLORS.idle; g.font = s === 0 ? "bold 12px system-ui" : "12px system-ui"; g.textAlign = "center";
+        g.fillText(s === 0 ? String((b % bpb) + 1) : SYLLABLES[sub][s], sx, Y0 + 46);
+        g.textAlign = "left";
       }
     }
-    // Lanes
-    lanes.forEach((fam, i) => {
-      const y = 20 + laneH * i + laneH / 2;
-      g.fillStyle = "#8b94a3"; g.font = "13px system-ui";
-      g.fillText(laneLabel(fam), 6, y + 4);
-      g.strokeStyle = "#232830"; g.lineWidth = 1;
-      g.beginPath(); g.moveTo(0, y + laneH / 2); g.lineTo(W, y + laneH / 2); g.stroke();
-    });
+    drawStaff(W, families);
+
     const adjNow = nowMs - run.calibrationMs;
-    // Expected hits (only the visible stretch)
     const loMs = (nowBeat - 3) * run.msPerBeat, hiMs = (nowBeat + viewBeats) * run.msPerBeat;
     for (const e of run.expected) {
       if (e.ms < loMs) continue;
       if (e.ms > hiMs) break;
       const x = xFor(e.beatAbs);
-      if (x < 60) continue;
-      const y = yFor(e.voice);
-      const r = e.accent ? 11 : 8;
+      if (x < X0 + 6) continue;
+      const fam = Grader.familyOf(e.voice);
+      const pos = STAFF_POS[fam];
+      const y = yPos(pos);
+      if (pos === 10) { g.strokeStyle = COLORS.line; g.lineWidth = 1; g.beginPath(); g.moveTo(x - 10, y + 0.5); g.lineTo(x + 10, y + 0.5); g.stroke(); } // ledger line
       const m = run.matches.get(e.idx);
-      g.lineWidth = 2;
-      if (m && m.tier) {
-        g.fillStyle = m.wrongVoice ? COLORS.wrong : COLORS[m.tier.name];
-        g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+      if (run.demo) {
+        notehead(x, y, e.voice, e.ms <= nowMs ? "filled" : "hollow", e.ms <= nowMs ? COLORS.demo : COLORS.idle, e.ghost);
+      } else if (m && m.tier) {
+        notehead(x, y, e.voice, "filled", m.wrongVoice ? COLORS.wrong : COLORS[m.tier.name], e.ghost);
         const hx = xFor((m.played.ms - run.calibrationMs) / run.msPerBeat);
-        g.strokeStyle = "#ffffff"; g.beginPath(); g.moveTo(hx, y - r - 4); g.lineTo(hx, y + r + 4); g.stroke();
+        g.strokeStyle = "#ffffff"; g.lineWidth = 1.5; g.beginPath(); g.moveTo(hx, y - 10); g.lineTo(hx, y + 10); g.stroke();
       } else if (e.ms + WINDOW_MS < adjNow) {
-        g.strokeStyle = COLORS.miss;
-        g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
-        g.beginPath(); g.moveTo(x - 5, y - 5); g.lineTo(x + 5, y + 5); g.moveTo(x + 5, y - 5); g.lineTo(x - 5, y + 5); g.stroke();
+        notehead(x, y, e.voice, "missed", COLORS.miss, e.ghost);
       } else {
-        g.strokeStyle = e.accent ? "#e8ebf0" : "#8b94a3";
-        g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
+        notehead(x, y, e.voice, "hollow", COLORS.idle, e.ghost);
       }
-      g.fillStyle = "#c9d1dc"; g.font = "bold 12px system-ui";
-      if (e.voice === "hihatOpen") g.fillText("o", x - 3, y - r - 6);        // notation-style open marker
-      else if (e.voice === "hihatClosed" && lanes.includes("hihat") && run.pattern.hits.some((h) => h.voice === "hihatOpen")) g.fillText("+", x - 4, y - r - 5);
-      if (e.label) { g.fillStyle = "#8b94a3"; g.font = "11px system-ui"; g.fillText(e.label, x - 4, y + r + 14); }
+      // Articulation marks above the note: o / + for the hi-hat, > for an accent; ( ) around a ghost note.
+      g.textAlign = "center"; g.fillStyle = "#c9d1dc"; g.font = "bold 13px system-ui";
+      let markY = y - 12;
+      if (e.voice === "hiHatOpen") { g.fillText("o", x, markY); markY -= 13; }
+      else if (e.voice === "hiHatClosed" && run.pattern.hits.some((h) => h.voice === "hiHatOpen")) { g.fillText("+", x, markY + 1); markY -= 13; }
+      if (e.accent) { g.strokeStyle = "#e8ebf0"; g.lineWidth = 2; g.beginPath(); g.moveTo(x - 5, markY - 7); g.lineTo(x + 4, markY - 3.5); g.lineTo(x - 5, markY); g.stroke(); }
+      if (e.ghost) { g.fillStyle = COLORS.idle; g.font = "15px system-ui"; g.fillText("(", x - 11, y + 5); g.fillText(")", x + 11, y + 5); }
+      if (e.label) { g.fillStyle = COLORS.idle; g.font = "12px system-ui"; g.fillText(e.label, x, Y0 + 28); }
+      g.textAlign = "left";
     }
-    // Extra hits
+    // Extra hits: a red x at the voice's staff position
     for (const p of run.extras) {
       if (p.msAdj < loMs || p.msAdj > hiMs) continue;
       const x = xFor(p.msAdj / run.msPerBeat);
-      if (x < 60) continue;
-      const y = yFor(p.voice);
+      if (x < X0 + 6) continue;
+      const y = yPos(STAFF_POS[Grader.familyOf(p.voice)] ?? 5);
       g.strokeStyle = COLORS.miss; g.lineWidth = 2;
       g.beginPath(); g.moveTo(x - 6, y - 6); g.lineTo(x + 6, y + 6); g.moveTo(x + 6, y - 6); g.lineTo(x - 6, y + 6); g.stroke();
     }
     // Playhead
-    g.strokeStyle = "#4fc3f7"; g.lineWidth = 2;
-    g.beginPath(); g.moveTo(playheadX, 0); g.lineTo(playheadX, H); g.stroke();
-    // Beat number
-    g.fillStyle = "#e8ebf0"; g.font = "bold 28px system-ui";
-    const beatInBar = ((Math.floor(nowBeat) % bpb) + bpb) % bpb + 1;
-    g.fillText(String(beatInBar), W - 40, 34);
+    g.strokeStyle = COLORS.demo; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(playheadX, 40); g.lineTo(playheadX, Y0 + 54); g.stroke();
 
-    // Live summary
     if (run.active) {
-      const res = result();
-      const s = Grader.summarise(res, { windowMs: WINDOW_MS, uptoMs: adjNow });
-      $("liveAcc").textContent = s.scored ? Math.round(s.accuracy) + "%" : "–";
-      $("liveCounts").textContent = s.scored ? `${s.counts.perfect} perfect · ${s.counts.good} good · ${s.counts.ok} ok · ${s.counts.miss} missed · ${s.counts.wrongVoice} wrong hat · ${s.extras} extra` : "";
-      const loopNo = Math.floor((nowBeat - COUNT_IN_BEATS) / bpb);
-      if (loopNo >= RECENT_BARS) {
-        const recent = Grader.summarise(res, { windowMs: WINDOW_MS, uptoMs: adjNow, fromMs: (COUNT_IN_BEATS + (loopNo - RECENT_BARS) * bpb) * run.msPerBeat });
-        $("liveRecent").innerHTML = `last ${RECENT_BARS} loops <b>${Math.round(recent.accuracy)}%</b>`;
+      if (!run.demo) {
+        const res = result();
+        const s = Grader.summarise(res, { windowMs: WINDOW_MS, uptoMs: adjNow });
+        $("liveAcc").textContent = s.scored ? Math.round(s.accuracy) + "%" : "–";
+        $("liveCounts").textContent = s.scored ? `${s.counts.perfect} perfect · ${s.counts.good} good · ${s.counts.ok} ok · ${s.counts.miss} missed · ${s.counts.wrongVoice} wrong hi-hat · ${s.extras} extra` : "";
+        const loopNo = Math.floor((nowBeat - COUNT_IN_BEATS) / bpb);
+        if (loopNo >= RECENT_BARS) {
+          const recent = Grader.summarise(res, { windowMs: WINDOW_MS, uptoMs: adjNow, fromMs: (COUNT_IN_BEATS + (loopNo - RECENT_BARS) * bpb) * run.msPerBeat });
+          $("liveRecent").innerHTML = `last ${RECENT_BARS} bars <b>${Math.round(recent.accuracy)}%</b>`;
+        }
       }
       requestAnimationFrame(draw);
     }
   }
   function idleScreen() {
-    g.fillStyle = "#8b94a3"; g.font = "16px system-ui";
-    g.fillText("Pick a pattern and tempo, then press Start. One bar of count-in, then play along with the click.", 20, 40);
+    const W = canvas.width;
+    drawStaff(W, ["crash", "hiHat", "ride", "highTom", "midTom", "snare", "floorTom", "bassDrum", "hiHatFoot"]);
+    g.fillStyle = COLORS.idle; g.font = "15px system-ui";
+    g.fillText("Pick a pattern and tempo. Play pattern lets you hear it; Start gives one bar of count-in, then play along with the click.", X0 + 10, 40);
+    // Legend: one of each notehead at its staff position
+    const demo = [["crash", 10], ["hiHatClosed", 9], ["ride", 8], ["highTom", 7], ["midTom", 6], ["snare", 5], ["floorTom", 3], ["bassDrum", 1], ["hiHatFoot", -1]];
+    demo.forEach(([voice, pos], i) => {
+      const x = X0 + 40 + i * 26;
+      if (pos === 10) { g.strokeStyle = COLORS.line; g.lineWidth = 1; g.beginPath(); g.moveTo(x - 10, yPos(10) + 0.5); g.lineTo(x + 10, yPos(10) + 0.5); g.stroke(); }
+      notehead(x, yPos(pos), voice, "hollow", COLORS.idle, false);
+    });
   }
 
   // ---------- report ----------
   function fmt(n, d = 0) { return (n > 0 ? "+" : "") + n.toFixed(d); }
   function renderReport() {
     const s = run.summary;
+    const vel = (v) => (v ? v.toFixed(0) : "–");
     const rows = Object.entries(s.voices).map(([v, r]) =>
-      `<tr><td>${VOICE_LABEL[v]}</td><td class="num">${r.hit}/${r.expected}</td><td class="num">${r.wrongVoice || "–"}</td><td class="num">${fmt(r.meanOffsetMs)} ms</td><td class="num">±${r.spreadMs.toFixed(0)} ms</td><td class="num">${r.accentVel ? r.accentVel.toFixed(0) : "–"}</td><td class="num">${r.plainVel ? r.plainVel.toFixed(0) : "–"}</td></tr>`).join("");
-    const tendency = Math.abs(s.meanOffsetMs) < 8 ? "right on the click" : s.meanOffsetMs > 0 ? "behind the click (late)" : "ahead of the click (early)";
-    const length = run.loops ? `${run.loops} loop${run.loops === 1 ? "" : "s"}` : "stopped before the first loop finished";
+      `<tr><td>${VOICE_LABEL[v]}</td><td class="num">${r.hit}/${r.expected}</td><td class="num">${r.wrongVoice || "–"}</td><td class="num">${fmt(r.meanOffsetMs)} ms</td><td class="num">±${r.spreadMs.toFixed(0)} ms</td><td class="num">${vel(r.accentVel)}</td><td class="num">${vel(r.plainVel)}</td><td class="num">${vel(r.ghostVel)}</td></tr>`).join("");
+    const tendency = Math.abs(s.meanOffsetMs) < 8 ? "right on the click" : s.meanOffsetMs > 0 ? "behind the click (dragging)" : "ahead of the click (rushing)";
+    const length = run.loops ? `${run.loops} bar${run.loops === 1 ? "" : "s"}` : "stopped before the first bar finished";
     $("reportBody").innerHTML = `
-      <p><strong style="font-size:26px">${Math.round(s.accuracy)}%</strong> &nbsp; ${run.pattern.name} · ${run.bpm} bpm · ${length}</p>
-      <p>${s.counts.perfect} perfect · ${s.counts.good} good · ${s.counts.ok} ok · ${s.counts["late-ish"]} loose · ${s.counts.miss} missed · ${s.counts.wrongVoice} wrong open/closed · ${s.extras} extra hits</p>
+      <p><strong style="font-size:26px">${Math.round(s.accuracy)}%</strong> &nbsp; ${run.pattern.name} · quarter note = ${run.bpm} · ${length}</p>
+      <p>${s.counts.perfect} perfect · ${s.counts.good} good · ${s.counts.ok} ok · ${s.counts["late-ish"]} loose · ${s.counts.miss} missed · ${s.counts.wrongVoice} wrong open/closed hi-hat · ${s.extras} extra hits</p>
       <p>Overall you played <b>${fmt(s.meanOffsetMs)} ms</b> ${tendency}, with a spread of ±${s.spreadMs.toFixed(0)} ms.
         ${run.pattern.id === "cal" && s.scored ? `<button id="applyCal">Use ${fmt(s.meanOffsetMs)} ms as latency offset</button>` : ""}</p>
-      <table><thead><tr><th>Voice</th><th class="num">Hit</th><th class="num">Wrong hat</th><th class="num">Mean offset</th><th class="num">Spread</th><th class="num">Accent vel.</th><th class="num">Other vel.</th></tr></thead><tbody>${rows}</tbody></table>`;
+      <table><thead><tr><th>Voice</th><th class="num">Hit</th><th class="num">Wrong hi-hat</th><th class="num">Mean offset</th><th class="num">Spread</th><th class="num">Accent vel.</th><th class="num">Plain vel.</th><th class="num">Ghost vel.</th></tr></thead><tbody>${rows}</tbody></table>`;
     $("report").hidden = false;
     const btn = $("applyCal");
     if (btn) btn.onclick = () => { $("cal").value = Math.round(run.calibrationMs + s.meanOffsetMs); saveNumber("drumTrainer.cal", $("cal").value); btn.disabled = true; };
@@ -531,7 +690,8 @@
   $("loopForever").checked = loadNumber("drumTrainer.forever", 0) === 1;
   $("loopForever").onchange = () => { $("loops").disabled = $("loopForever").checked; };
   $("loops").disabled = $("loopForever").checked;
-  $("startBtn").onclick = startRun;
+  $("startBtn").onclick = () => startRun();
+  $("playBtn").onclick = () => startRun({ demo: true });
   $("stopBtn").onclick = stopRun;
   $("midiSel").onchange = () => attachInput(midiAccess && midiAccess.inputs.get($("midiSel").value));
   $("browserHint").textContent = navigator.platform.startsWith("Win")
