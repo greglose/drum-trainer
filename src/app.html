@@ -78,6 +78,7 @@
     </span>
   </label>
   <label>Latency offset (ms) <input id="cal" type="number" min="-200" max="200" value="0" /></label>
+  <label>Visual offset (ms) <input id="vis" type="number" min="-400" max="400" step="10" value="0" title="Positive delays the display. Raise it if the beat flashes before you hear the click." /></label>
   <label>Playback sound <select id="soundSel"><option value="synth">Built-in sounds</option></select></label>
   <label>Click volume <input id="clickVol" type="range" min="0" max="100" value="70" /></label>
   <span class="buttons">
@@ -94,6 +95,7 @@
       <span>last note: <b id="lastNote">–</b></span>
       <span>hi-hat pedal: <b id="pedalState">no controller data yet</b></span>
       <span>open/closed from: <b id="hatMode">note number</b></span>
+      <span>audio latency: <b id="latency">–</b></span>
     </div>
     <canvas id="staff" width="1200" height="340"></canvas>
     <div id="live">
@@ -141,6 +143,8 @@
     <p class="hint">No kit handy? Keyboard: <kbd>space</kbd> bass drum, <kbd>J</kbd> snare, <kbd>F</kbd> closed hi-hat, <kbd>G</kbd> open hi-hat, <kbd>D</kbd> foot hi-hat, <kbd>R</kbd> high tom, <kbd>T</kbd> mid tom, <kbd>Y</kbd> floor tom, <kbd>U</kbd> crash, <kbd>I</kbd> ride.</p>
     <p class="hint">"Play pattern" performs the pattern at the chosen tempo. Pick the module under Playback sound to hear it on the kit's own sounds (the page sends it MIDI), or leave Built-in sounds.
       "Metronome" is the click alone at that tempo, accented on beat 1, for the bar count or until Stop; Click volume applies to every mode, and at zero you practise without a click.</p>
+    <p class="hint">If the beat flash and the click do not land together, run the Metronome and adjust Visual offset until they do: raise it when the flash comes first (usual with
+      Bluetooth headphones or speakers), lower it when the click comes first. It only moves the display; scoring is unaffected. The status line shows the latency the browser reports.</p>
     <p class="hint" id="browserHint"></p>
     <p class="hint">Free and open source (MIT). Everything stays in this browser; nothing is sent anywhere. <a href="https://github.com/greglose/drum-trainer">Source on GitHub</a>.</p>
   </div>
@@ -396,8 +400,18 @@
       setClickVolume();
     }
     if (ctx.state === "suspended") ctx.resume();
+    renderLatency();
     return ctx;
   }
+  // What the browser believes sits between the audio clock and the ear. Bluetooth and some
+  // drivers add more than it knows about; that remainder is what Visual offset is for.
+  function renderLatency() {
+    if (!ctx) return;
+    const base = Math.round((ctx.baseLatency || 0) * 1000);
+    const out = ctx.outputLatency ? Math.round(ctx.outputLatency * 1000) + " ms output" : "output unknown";
+    $("latency").textContent = `${base} ms base, ${out}`;
+  }
+  const visualOffsetMs = () => Number($("vis").value) || 0;
   function setClickVolume() {
     if (clickBus) clickBus.gain.value = (Number($("clickVol").value) / 100) ** 1.5; // perceptual-ish taper
   }
@@ -641,7 +655,8 @@
     g.clearRect(0, 0, W, H);
     g.textAlign = "left";
     if (!run) { idleScreen(); return; }
-    const nowMs = songNowMs();
+    // Display time: the heard-audio clock, moved by the user's visual offset. Scoring never uses this.
+    const nowMs = songNowMs() - (run.active ? visualOffsetMs() : 0);
     const nowBeat = nowMs / run.msPerBeat;
     const hits = run.pattern ? run.pattern.hits : [];
     const families = [...new Set(hits.map((h) => Grader.familyOf(h.voice)))].sort((a, b) => STAFF_POS[b] - STAFF_POS[a]);
@@ -656,8 +671,20 @@
     // Header: time signature, tempo, loop labels, beat counter
     g.fillStyle = COLORS.idle; g.font = "13px system-ui";
     g.fillText(`${bpb}/4 · quarter note = ${run.bpm}` + (run.demo ? " · playback" : run.metronome ? " · metronome" : ""), 8, 22);
-    g.fillStyle = "#e8ebf0"; g.font = "bold 28px system-ui"; g.textAlign = "right";
-    g.fillText(String(((Math.floor(nowBeat) % bpb) + bpb) % bpb + 1), W - 12, 32);
+    // Beat pulse: a flash on every click that fades over 150 ms, brighter on beat 1, so the eye has
+    // something as sharp as the ear to compare against.
+    const beatIdx = Math.floor(nowBeat);
+    const phase = nowBeat - beatIdx;
+    const pulse = nowMs >= 0 && nowBeat < run.totalBeats ? Math.max(0, 1 - (phase * run.msPerBeat) / 150) : 0;
+    const downbeat = ((beatIdx % bpb) + bpb) % bpb === 0;
+    if (pulse > 0) {
+      g.globalAlpha = pulse * (downbeat ? 0.95 : 0.7);
+      g.fillStyle = COLORS.demo;
+      g.beginPath(); g.arc(W - 30, 24, 26, 0, Math.PI * 2); g.fill();
+      g.globalAlpha = 1;
+    }
+    g.fillStyle = pulse > 0.4 ? "#06202c" : "#e8ebf0"; g.font = "bold 28px system-ui"; g.textAlign = "center";
+    g.fillText(String(((beatIdx % bpb) + bpb) % bpb + 1), W - 30, 34);
     g.textAlign = "left";
 
     // Bar lines, beat lines, subdivision ticks and counting
@@ -728,8 +755,8 @@
       g.strokeStyle = COLORS.miss; g.lineWidth = 2;
       g.beginPath(); g.moveTo(x - 6, y - 6); g.lineTo(x + 6, y + 6); g.moveTo(x + 6, y - 6); g.lineTo(x - 6, y + 6); g.stroke();
     }
-    // Playhead
-    g.strokeStyle = COLORS.demo; g.lineWidth = 2;
+    // Playhead, thickening on each beat with the pulse
+    g.strokeStyle = COLORS.demo; g.lineWidth = 2 + pulse * 3;
     g.beginPath(); g.moveTo(playheadX, 40); g.lineTo(playheadX, Y0 + 54); g.stroke();
 
     if (run.active) {
@@ -935,6 +962,8 @@
   $("stopBtn").onclick = stopRun;
   $("clickVol").value = loadNumber("drumTrainer.clickVol", 70);
   $("clickVol").oninput = () => { setClickVolume(); saveNumber("drumTrainer.clickVol", $("clickVol").value); };
+  $("vis").value = loadNumber("drumTrainer.visualOffset", 0);
+  $("vis").onchange = () => saveNumber("drumTrainer.visualOffset", visualOffsetMs());
   $("midiSel").onchange = () => attachInput(midiAccess && midiAccess.inputs.get($("midiSel").value));
   $("browserHint").textContent = navigator.platform.startsWith("Win")
     ? "Windows note: only one program can hold the module's MIDI port at a time. Close BFD Player while using this page and listen to the module's own sounds instead."

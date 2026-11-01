@@ -149,7 +149,12 @@ console.log("scenario 4", JSON.stringify(demo));
 if (!demo.demo || demo.sounded !== demo.expected || demo.expected === 0) fail("scenario 4: every written note should have been sounded");
 if (demo.played !== 0 || demo.summary !== null || !demo.reportHidden) fail("scenario 4: playback must ignore input and produce no report");
 
-// ---- 5. metronome only ----
+// ---- 5. metronome only (with a visual offset set, which must persist and must not touch scoring state) ----
+await page.fill("#vis", "120");
+await page.dispatchEvent("#vis", "change");
+await page.reload();
+await page.waitForTimeout(400);
+if ((await page.inputValue("#vis")) !== "120") fail("scenario 5: visual offset should persist across reload");
 await page.fill("#bpm", "240");
 await page.fill("#loops", "2");
 await page.fill("#clickVol", "40");
@@ -165,6 +170,10 @@ console.log("scenario 5", JSON.stringify({ ...mid, ...after }));
 if (!mid.metronome || mid.countIn !== 0 || mid.totalBeats !== 8 || mid.expected !== 0) fail("scenario 5: metronome should run 2 bars from bar 1 with no written notes");
 if (mid.clicks < 3) fail("scenario 5: clicks should have been scheduled");
 if (mid.played !== 0 || after.summary !== null || !after.reportHidden || !after.startEnabled) fail("scenario 5: metronome must ignore input, produce no report, and re-enable Start");
+const latencyText = await page.textContent("#latency");
+if (!/\d+ ms base/.test(latencyText)) fail("scenario 5: latency readout should show the base latency, got: " + latencyText);
+await page.fill("#vis", "0");
+await page.dispatchEvent("#vis", "change");
 
 // ---- 6. pattern editor: two bars, save, play, reload, export, delete ----
 await page.click("#edNew");

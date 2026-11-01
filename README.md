@@ -28,6 +28,11 @@ once its pads are learned.
    mode; at zero you practise without a click and are still graded against the beat.
 6. Run the **Calibration** pattern once and press "Use ... as latency offset" in the
    report. That removes the module's and the USB chain's fixed delay from every later score.
+7. If the beat flash on screen and the click do not land together, run the Metronome and
+   adjust **Visual offset** until they do: raise it when the flash comes first (usual with
+   Bluetooth headphones or speakers, whose delay the browser cannot see), lower it when the
+   click comes first. It moves only the display; scoring is unaffected. The status line shows
+   the audio latency the browser reports.
 
 No kit handy? The keyboard stands in: space is the bass drum, J the snare, F the closed
 hi-hat, G the open hi-hat, D the foot hi-hat, R T Y the high, mid and floor toms, U the
