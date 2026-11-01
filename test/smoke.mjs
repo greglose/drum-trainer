@@ -7,7 +7,9 @@
 //     performs every written note without taking input or producing a report;
 //  5. the metronome clicks on its own from bar 1, ignores input, and produces no report;
 //  6. the editor builds a two-bar pattern, saves it under My patterns, plays it as a whole,
-//     survives a reload, exports as JSON, and deletes.
+//     survives a reload, exports as JSON, and deletes;
+//  7. skins: the default applies, a chosen skin persists across reload, and the copy pack
+//     (mode buttons, report heading) and canvas colours follow it.
 // CHROMIUM_PATH points Playwright at an existing Chromium when its own is not installed.
 import { chromium } from "playwright";
 import { dirname, join } from "node:path";
@@ -221,6 +223,27 @@ status = await page.textContent("#edStatus");
 const groupsLeft = await page.evaluate(() => document.querySelectorAll("#patternSel optgroup").length);
 if (!/Deleted "Smoke two-bar"/.test(status) || groupsLeft !== 1) fail("scenario 6: delete should remove the pattern and the My patterns group");
 console.log("scenario 6", JSON.stringify({ cellCount, states, selected: selected.text, runInfo, afterReload, exported: exported.patterns.length }));
+
+// ---- 7. skins ----
+const skin0 = await page.evaluate(() => ({ skin: document.documentElement.dataset.skin, start: document.getElementById("startBtn").textContent, options: [...document.querySelectorAll("#skinSel option")].map((o) => o.value) }));
+if (skin0.skin !== "arena" || skin0.start !== "Lights up" || skin0.options.join() !== "classic,strip,leopard,arena,tape") fail("scenario 7: default skin should be arena with its copy pack: " + JSON.stringify(skin0));
+await page.selectOption("#skinSel", "strip");
+await page.reload();
+await page.waitForTimeout(400);
+const skin1 = await page.evaluate(() => ({ skin: document.documentElement.dataset.skin, start: document.getElementById("startBtn").textContent, play: document.getElementById("playBtn").textContent, report: document.getElementById("reportTitle").textContent, accent: getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() }));
+if (skin1.skin !== "strip" || skin1.start !== "Showtime" || skin1.play !== "Spin the record" || skin1.report !== "Encore" || skin1.accent !== "#ff2d95") fail("scenario 7: strip skin should persist with its copy pack: " + JSON.stringify(skin1));
+// A graded run under the skin uses its tier words in the feedback and the report
+await page.selectOption("#patternSel", "cal");
+await page.fill("#bpm", "240"); await page.fill("#loops", "1"); await page.fill("#cal", "0");
+await page.click("#startBtn");
+await playExpected(5);
+await finished();
+const words = await page.evaluate(() => ({ fb: document.getElementById("feedback").textContent, report: document.getElementById("reportBody").textContent }));
+if (!/face-melter/.test(words.fb) || !/4 face-melter/.test(words.report) || !/bombed/.test(words.report)) fail("scenario 7: skin tier words should appear in feedback and report: " + JSON.stringify(words));
+for (const sk of ["classic", "leopard", "arena", "tape"]) { await page.selectOption("#skinSel", sk); await page.waitForTimeout(150); await page.screenshot({ path: join(shots, `skin-${sk}.png`) }); }
+await page.selectOption("#skinSel", "strip"); await page.waitForTimeout(150); await page.screenshot({ path: join(shots, "skin-strip.png") });
+await page.selectOption("#skinSel", "arena");
+console.log("scenario 7", JSON.stringify({ skin0, skin1, fb: words.fb }));
 
 await browser.close();
 if (errors.length) { console.error("page errors:", errors); process.exitCode = 1; }

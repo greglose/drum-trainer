@@ -42,6 +42,16 @@ crash, I the ride.
 software (BFD Player, a DAW) while the page is open, and listen to the module's own sounds.
 macOS shares the port, so both can run together.
 
+## Themes
+
+The Theme select in the header switches between five skins, remembered per browser:
+Classic, Sunset Strip (neon and chrome), Spandex and Leopard (prints and lightning), Arena
+Rig (truss, light washes, spotlight beat; the default) and Mixtape (a cassette deck, the one
+light skin). A skin is a block of colour tokens, a decorative layer behind the content and a
+copy pack: the mode buttons and the tier words change ("Showtime", "face-melter"), while the
+notation, the thresholds and the scores do not. Fonts are system stacks, so the page still
+makes no network requests.
+
 ## Notation
 
 The staff follows the Percussive Arts Society's *Guide to Standardized Drumset Notation*
