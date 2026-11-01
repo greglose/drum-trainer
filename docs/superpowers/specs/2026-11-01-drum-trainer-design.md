@@ -240,3 +240,43 @@ and a CI check that every library pattern validates.
 Decisions for the owner, summarised: (1) C.1 and C.2 in the next phase, or one of them;
 (2) community pattern contributions, yes or no; (3) theme direction, standalone dark or
 the site's tokens with a light theme; (4) whether to test and claim Firefox support.
+
+## Decisions (recorded 2026-11-01)
+
+1. **Triplets, swing and time signatures (C.1, C.2) are deferred.** The grid stays straight
+   sixteenths in 4/4 for the next phase. The pattern model keeps `beatsPerBar` so nothing
+   closes the door.
+2. **Community patterns: yes.** How it works is below.
+3. **One theme.** No light and dark; see the UI spec's decisions.
+4. Firefox: still open.
+
+### Community patterns: how it works
+
+The repo is public and the pattern format is already the one the editor exports, so the
+library can be a folder of files that anyone can add to by pull request, with the app's own
+validator as the gate. No server, no accounts, nothing leaves a player's browser unless they
+choose to send it.
+
+- **Where they live.** `patterns/<category>/<slug>.json`, one pattern per file, categories
+  `grooves`, `rudiments`, `fills`, `independence`. Each file is the export shape plus
+  `category`, an optional `author` (a name or GitHub handle, shown in the library) and an
+  optional `source` note ("PAS rudiment 16", "traditional"). The fourteen built-ins move out
+  of `app.html` into this folder as the first entries.
+- **How they ship.** `scripts/build.mjs` reads the folder, runs every file through
+  `normalizePattern`, fails the build on the first bad one, and inlines the validated list
+  into `dist/index.html`. The one-file rule holds; a deploy from `main` carries the library.
+- **How a player contributes.** Build the pattern in the editor, then **Suggest to the
+  library** in the editor toolbar. That opens a new GitHub issue in a new tab with the
+  pattern's JSON and a short form (category, author credit) already filled in; the player
+  presses Submit on GitHub. Nothing is sent by the page itself, which keeps the privacy
+  promise literal. The owner (or anyone) turns an accepted issue into a pull request, or a
+  contributor who knows git opens the pull request directly using the template.
+- **What review checks.** CI runs the validator over the folder and a duplicate check
+  (same hits as an existing pattern, any name). A human checks the name is descriptive and
+  standard ("Rock groove, open hi-hat on the & of 4", not "my beat 3"), the stickings are
+  plausible, the category fits, and nothing in a name or author field is a trademark or a
+  lyric. `CONTRIBUTING.md` states the naming rules, the one-pattern-per-file rule and that
+  contributions are MIT like the rest of the repo.
+- **What is out.** Ratings, comments, moderation queues, download counts: all need a
+  backend. If the library grows past what a dropdown holds, the next step is search and
+  categories in the Patterns view, which the UI spec already has.
