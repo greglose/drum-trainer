@@ -62,8 +62,10 @@ pitched instruments, multi-user or cloud features, iOS (Safari has no Web MIDI).
   `dist/index.html`. A Playwright smoke test drives six scenarios through the real MIDI
   handler. CI runs both; Cloudflare Pages builds and deploys every push to `main`.
 
-Not yet done anywhere: a session on the physical kit. Every timing and hi-hat claim above
-is verified in a headless browser with synthetic MIDI, not with the Nitro Pro.
+Hardware validation: done by the owner on the Nitro Pro on 2026-11-01 with the factory
+defaults confirmed, after the headless verification above. v0.4.0 (same day) then shipped the
+module split, the pattern library folder with the contribution flow, and the three-view
+layout from the UI spec; see the plan for what remains open.
 
 ## Architecture
 
