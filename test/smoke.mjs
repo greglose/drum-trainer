@@ -4,7 +4,8 @@
 //  2. pedal mode: both hat voices mapped to note 42, open/closed decided by controller 4;
 //  3. "until Stop" loop, stopped mid-bar, report covers completed loops only;
 //  4. a pad map saved under the old voice names migrates, and "Play pattern" (built-in sounds)
-//     performs every written note without taking input or producing a report.
+//     performs every written note without taking input or producing a report;
+//  5. the metronome clicks on its own from bar 1, ignores input, and produces no report.
 // CHROMIUM_PATH points Playwright at an existing Chromium when its own is not installed.
 import { chromium } from "playwright";
 import { dirname, join } from "node:path";
@@ -145,6 +146,23 @@ const demo = await page.evaluate(() => { const r = window.__drumTrainer.run; ret
 console.log("scenario 4", JSON.stringify(demo));
 if (!demo.demo || demo.sounded !== demo.expected || demo.expected === 0) fail("scenario 4: every written note should have been sounded");
 if (demo.played !== 0 || demo.summary !== null || !demo.reportHidden) fail("scenario 4: playback must ignore input and produce no report");
+
+// ---- 5. metronome only ----
+await page.fill("#bpm", "240");
+await page.fill("#loops", "2");
+await page.fill("#clickVol", "40");
+await page.click("#metroBtn");
+if (!(await page.isDisabled("#startBtn")) || !(await page.isDisabled("#playBtn"))) fail("scenario 5: Start and Play should be disabled while the metronome runs");
+await page.evaluate(() => window.__drumTrainer.recordHit("snare", 100, performance.now() + 300));
+await page.waitForTimeout(900);
+const mid = await page.evaluate(() => { const r = window.__drumTrainer.run; return { metronome: r.metronome, countIn: r.countIn, clicks: r.nextClickBeat, totalBeats: r.totalBeats, expected: r.expected.length, played: r.played.length }; });
+await page.screenshot({ path: join(shots, "metronome.png") });
+await finished();
+const after = await page.evaluate(() => ({ summary: window.__drumTrainer.run.summary, reportHidden: document.getElementById("report").hidden, startEnabled: !document.getElementById("startBtn").disabled }));
+console.log("scenario 5", JSON.stringify({ ...mid, ...after }));
+if (!mid.metronome || mid.countIn !== 0 || mid.totalBeats !== 8 || mid.expected !== 0) fail("scenario 5: metronome should run 2 bars from bar 1 with no written notes");
+if (mid.clicks < 3) fail("scenario 5: clicks should have been scheduled");
+if (mid.played !== 0 || after.summary !== null || !after.reportHidden || !after.startEnabled) fail("scenario 5: metronome must ignore input, produce no report, and re-enable Start");
 
 await browser.close();
 if (errors.length) { console.error("page errors:", errors); process.exitCode = 1; }

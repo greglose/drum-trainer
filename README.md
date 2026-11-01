@@ -23,7 +23,9 @@ once its pads are learned.
    built-in sounds, or through the module's own sounds if you pick it under "Playback sound"
    (the page sends it MIDI on channel 10).
 5. Set a loop count (or "until Stop") and press **Start**. One bar of count-in, then play
-   along with the click.
+   along with the click. **Metronome** gives you the click alone at the same tempo, accented
+   on beat 1, with the beat and count shown on the staff. "Click volume" applies to every
+   mode; at zero you practise without a click and are still graded against the beat.
 6. Run the **Calibration** pattern once and press "Use ... as latency offset" in the
    report. That removes the module's and the USB chain's fixed delay from every later score.
 

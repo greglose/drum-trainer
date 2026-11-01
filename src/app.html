@@ -18,6 +18,7 @@
   label.inline { flex-direction: row; align-items: center; gap: 6px; }
   select, input[type=number], button { font: inherit; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
   input[type=number] { width: 70px; }
+  input[type=range] { width: 110px; margin: 8px 0 7px; }
   button { cursor: pointer; }
   button.primary { background: var(--accent); color: #06202c; border-color: transparent; font-weight: 600; }
   button:disabled { opacity: .45; cursor: default; }
@@ -62,7 +63,9 @@
   </label>
   <label>Latency offset (ms) <input id="cal" type="number" min="-200" max="200" value="0" /></label>
   <label>Playback sound <select id="soundSel"><option value="synth">Built-in sounds</option></select></label>
+  <label>Click volume <input id="clickVol" type="range" min="0" max="100" value="70" /></label>
   <span class="buttons">
+    <button id="metroBtn" title="Click only, at this tempo">Metronome</button>
     <button id="playBtn" title="Hear the pattern played at this tempo">Play pattern</button>
     <button id="startBtn" class="primary">Start</button>
     <button id="stopBtn" disabled>Stop</button>
@@ -100,7 +103,8 @@
       Hi-hat open vs closed: if the module sends different note numbers (46 open, 42 closed), those are used. If it sends one note for both,
       learn both "Hi-hat (closed)" and "Hi-hat (open)" to that same note and the pedal position (controller 4) decides instead: pressed = closed.</p>
     <p class="hint">No kit handy? Keyboard: <kbd>space</kbd> bass drum, <kbd>J</kbd> snare, <kbd>F</kbd> closed hi-hat, <kbd>G</kbd> open hi-hat, <kbd>D</kbd> foot hi-hat, <kbd>R</kbd> high tom, <kbd>T</kbd> mid tom, <kbd>Y</kbd> floor tom, <kbd>U</kbd> crash, <kbd>I</kbd> ride.</p>
-    <p class="hint">"Play pattern" performs the pattern at the chosen tempo. Pick the module under Playback sound to hear it on the kit's own sounds (the page sends it MIDI), or leave Built-in sounds.</p>
+    <p class="hint">"Play pattern" performs the pattern at the chosen tempo. Pick the module under Playback sound to hear it on the kit's own sounds (the page sends it MIDI), or leave Built-in sounds.
+      "Metronome" is the click alone at that tempo, accented on beat 1, for the bar count or until Stop; Click volume applies to every mode, and at zero you practise without a click.</p>
     <p class="hint" id="browserHint"></p>
     <p class="hint">Free and open source (MIT). Everything stays in this browser; nothing is sent anywhere. <a href="https://github.com/greglose/drum-trainer">Source on GitHub</a>.</p>
   </div>
@@ -308,18 +312,27 @@
   // ---------- audio clock, metronome, built-in drum sounds ----------
   let ctx = null;
   let noiseBuf = null;
+  let clickBus = null;   // master gain for the click, driven by the Click volume slider
   function ensureCtx() {
-    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      clickBus = ctx.createGain();
+      clickBus.connect(ctx.destination);
+      setClickVolume();
+    }
     if (ctx.state === "suspended") ctx.resume();
     return ctx;
+  }
+  function setClickVolume() {
+    if (clickBus) clickBus.gain.value = (Number($("clickVol").value) / 100) ** 1.5; // perceptual-ish taper
   }
   function click(atCtxTime, downbeat) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.frequency.value = downbeat ? 1400 : 950;
-    gain.gain.setValueAtTime(downbeat ? 0.5 : 0.3, atCtxTime);
+    gain.gain.setValueAtTime(downbeat ? 0.7 : 0.45, atCtxTime);
     gain.gain.exponentialRampToValueAtTime(0.001, atCtxTime + 0.04);
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(gain).connect(clickBus);
     osc.start(atCtxTime);
     osc.stop(atCtxTime + 0.05);
   }
@@ -378,19 +391,20 @@
     }
   }
 
-  // ---------- run lifecycle (practice run, or playback of the written pattern) ----------
-  function startRun({ demo = false } = {}) {
+  // ---------- run lifecycle: practice run, playback of the written pattern, or metronome only ----------
+  function startRun({ demo = false, metronome = false } = {}) {
     ensureCtx();
-    const pattern = PATTERNS.find((p) => p.id === $("patternSel").value) || PATTERNS[0];
+    const pattern = metronome ? null : PATTERNS.find((p) => p.id === $("patternSel").value) || PATTERNS[0];
     const bpm = Math.min(240, Math.max(40, Number($("bpm").value) || 90));
     const forever = $("loopForever").checked;
     const loops = forever ? Infinity : Math.min(999, Math.max(1, Number($("loops").value) || 4));
-    const calibrationMs = demo ? 0 : Number($("cal").value) || 0;
+    const calibrationMs = demo || metronome ? 0 : Number($("cal").value) || 0;
     saveNumber("drumTrainer.bpm", bpm); saveNumber("drumTrainer.cal", $("cal").value);
     saveNumber("drumTrainer.loops", $("loops").value); saveNumber("drumTrainer.forever", forever ? 1 : 0);
     const msPerBeat = 60000 / bpm;
-    const beatsPerBar = pattern.beatsPerBar || 4;
-    const totalBeats = forever ? Infinity : COUNT_IN_BEATS + loops * beatsPerBar;
+    const beatsPerBar = pattern?.beatsPerBar || 4;
+    const countIn = metronome ? 0 : COUNT_IN_BEATS; // the metronome starts on bar 1
+    const totalBeats = forever ? Infinity : countIn + loops * beatsPerBar;
     const midiOut = demo && $("soundSel").value !== "synth" && midiAccess ? midiAccess.outputs.get($("soundSel").value) || null : null;
 
     // Align the audio clock to performance.now(), in the "what you hear" domain.
@@ -401,8 +415,8 @@
     const songStartPerf = anchorPerf + (songStartCtx - anchorCtx) * 1000;
 
     run = {
-      pattern, bpm, loops, forever, calibrationMs, msPerBeat, beatsPerBar, totalBeats,
-      songStartCtx, songStartPerf, demo, midiOut,
+      pattern, bpm, loops, forever, calibrationMs, msPerBeat, beatsPerBar, countIn, totalBeats,
+      songStartCtx, songStartPerf, demo, metronome, midiOut,
       expected: [], generatedLoops: 0,
       played: [], matches: new Map(), extras: [],
       nextClickBeat: 0, nextSoundIdx: 0, sounded: 0,
@@ -410,20 +424,22 @@
     };
     ensureExpected(forever ? LOOKAHEAD_BEATS : Infinity);
     $("report").hidden = true;
-    $("startBtn").disabled = true; $("playBtn").disabled = true; $("stopBtn").disabled = false;
+    $("startBtn").disabled = true; $("playBtn").disabled = true; $("metroBtn").disabled = true; $("stopBtn").disabled = false;
     $("feedback").textContent = ""; $("liveRecent").textContent = ""; $("liveCounts").textContent = "";
-    $("liveAcc").textContent = demo ? "listen" : "–";
+    $("liveAcc").textContent = demo ? "listen" : metronome ? "click" : "–";
     if (demo) { $("feedback").className = "demo"; $("feedback").textContent = midiOut ? "playing on " + midiOut.name : "playing"; }
+    if (metronome) { $("feedback").className = "demo"; $("feedback").textContent = `quarter note = ${bpm}`; }
     run.schedulerId = setInterval(scheduleAhead, 25);
     scheduleAhead();
-    if (!forever) run.endTimer = setTimeout(finishRun, (totalBeats * msPerBeat) + (demo ? 700 : WINDOW_MS + 300));
+    if (!forever) run.endTimer = setTimeout(finishRun, (totalBeats * msPerBeat) + (demo ? 700 : metronome ? 100 : WINDOW_MS + 300));
     requestAnimationFrame(draw);
   }
-  // Make sure expected notes exist up to `uptoBeat` (all loops when finite).
+  // Make sure expected notes exist up to `uptoBeat` (all loops when finite). The metronome has none.
   function ensureExpected(uptoBeat) {
-    const want = run.forever ? Math.ceil((uptoBeat - COUNT_IN_BEATS) / run.beatsPerBar) + 1 : run.loops;
+    if (!run.pattern) return;
+    const want = run.forever ? Math.ceil((uptoBeat - run.countIn) / run.beatsPerBar) + 1 : run.loops;
     if (want > run.generatedLoops) {
-      Grader.appendRepeats(run.expected, run.pattern, run.bpm, COUNT_IN_BEATS, run.generatedLoops, want);
+      Grader.appendRepeats(run.expected, run.pattern, run.bpm, run.countIn, run.generatedLoops, want);
       run.generatedLoops = want;
     }
   }
@@ -456,8 +472,8 @@
     run.endMs = songNowMs();
     run.active = false;
     clearInterval(run.schedulerId);
-    $("startBtn").disabled = false; $("playBtn").disabled = false; $("stopBtn").disabled = true;
-    if (run.demo) {
+    $("startBtn").disabled = false; $("playBtn").disabled = false; $("metroBtn").disabled = false; $("stopBtn").disabled = true;
+    if (run.demo || run.metronome) {
       $("feedback").textContent = "";
       $("liveAcc").textContent = "–";
       requestAnimationFrame(draw);
@@ -465,9 +481,9 @@
     }
     if (run.forever) {
       // Score completed loops only; the partial loop at Stop and notes generated ahead are dropped.
-      const playedLoops = Math.max(0, Math.floor((run.endMs / run.msPerBeat - COUNT_IN_BEATS) / run.beatsPerBar));
+      const playedLoops = Math.max(0, Math.floor((run.endMs / run.msPerBeat - run.countIn) / run.beatsPerBar));
       run.expected = run.expected.filter((e) => e.bar < playedLoops);
-      run.extras = run.extras.filter((p) => p.msAdj <= (COUNT_IN_BEATS + playedLoops * run.beatsPerBar) * run.msPerBeat);
+      run.extras = run.extras.filter((p) => p.msAdj <= (run.countIn + playedLoops * run.beatsPerBar) * run.msPerBeat);
       run.loops = playedLoops;
     }
     run.summary = Grader.summarise(result(), { windowMs: WINDOW_MS });
@@ -475,7 +491,7 @@
   }
   const result = () => ({ matches: run.matches, extras: run.extras, expected: run.expected });
   function recordHit(voice, velocity, perfTime) {
-    if (!run || !run.active || run.demo) return;
+    if (!run || !run.active || run.demo || run.metronome) return;
     const ms = perfTime - run.songStartPerf;
     if (ms < 0) return;
     const p = { ms, voice, velocity };
@@ -486,7 +502,7 @@
       const dt = Math.round(m.dtMs);
       fb = { cls: m.wrongVoice ? "wrong" : m.tier.name, text: `${m.tier.name} ${dt > 0 ? "+" : ""}${dt} ms` };
       if (m.wrongVoice) fb.text += ` · written ${VOICE_LABEL[m.expected.voice].toLowerCase()}`;
-    } else if (ms - run.calibrationMs >= COUNT_IN_BEATS * run.msPerBeat - WINDOW_MS) {
+    } else if (ms - run.calibrationMs >= run.countIn * run.msPerBeat - WINDOW_MS) {
       fb = { cls: "miss", text: "extra hit" };
     }
     if (fb) { $("feedback").className = fb.cls; $("feedback").textContent = fb.text; }
@@ -545,17 +561,19 @@
     if (!run) { idleScreen(); return; }
     const nowMs = songNowMs();
     const nowBeat = nowMs / run.msPerBeat;
-    const families = [...new Set(run.pattern.hits.map((h) => Grader.familyOf(h.voice)))].sort((a, b) => STAFF_POS[b] - STAFF_POS[a]);
+    const hits = run.pattern ? run.pattern.hits : [];
+    const families = [...new Set(hits.map((h) => Grader.familyOf(h.voice)))].sort((a, b) => STAFF_POS[b] - STAFF_POS[a]);
     const viewBeats = 8;
     const playheadX = X0 + (W - X0) * 0.28;
     const pxPerBeat = (W - X0 - 30) / viewBeats;
     const xFor = (beat) => playheadX + (beat - nowBeat) * pxPerBeat;
     const bpb = run.beatsPerBar;
-    const sub = subdivisionOf(run.pattern);
+    const sub = run.pattern ? subdivisionOf(run.pattern) : 1;
+    const COUNT_IN = run.countIn;
 
     // Header: time signature, tempo, loop labels, beat counter
     g.fillStyle = COLORS.idle; g.font = "13px system-ui";
-    g.fillText(`${bpb}/4 · quarter note = ${run.bpm}` + (run.demo ? " · playback" : ""), 8, 22);
+    g.fillText(`${bpb}/4 · quarter note = ${run.bpm}` + (run.demo ? " · playback" : run.metronome ? " · metronome" : ""), 8, 22);
     g.fillStyle = "#e8ebf0"; g.font = "bold 28px system-ui"; g.textAlign = "right";
     g.fillText(String(((Math.floor(nowBeat) % bpb) + bpb) % bpb + 1), W - 12, 32);
     g.textAlign = "left";
@@ -571,8 +589,8 @@
       g.beginPath(); g.moveTo(x, yPos(8)); g.lineTo(x, yPos(0)); g.stroke();
       if (bar) {
         g.fillStyle = COLORS.idle; g.font = "12px system-ui";
-        const loopNo = (b - COUNT_IN_BEATS) / bpb + 1;
-        g.fillText(b < COUNT_IN_BEATS ? "count-in" : (run.forever || loopNo <= run.loops ? "bar " + loopNo + (run.forever ? "" : " of " + run.loops) : "end"), x + 4, yPos(10) - 26);
+        const loopNo = (b - COUNT_IN) / bpb + 1;
+        g.fillText(b < COUNT_IN ? "count-in" : (run.forever || loopNo <= run.loops ? "bar " + loopNo + (run.forever ? "" : " of " + run.loops) : "end"), x + 4, yPos(10) - 26);
       }
       for (let s = 0; s < sub; s++) {
         const sx = xFor(b + s / sub);
@@ -612,7 +630,7 @@
       g.textAlign = "center"; g.fillStyle = "#c9d1dc"; g.font = "bold 13px system-ui";
       let markY = y - 12;
       if (e.voice === "hiHatOpen") { g.fillText("o", x, markY); markY -= 13; }
-      else if (e.voice === "hiHatClosed" && run.pattern.hits.some((h) => h.voice === "hiHatOpen")) { g.fillText("+", x, markY + 1); markY -= 13; }
+      else if (e.voice === "hiHatClosed" && hits.some((h) => h.voice === "hiHatOpen")) { g.fillText("+", x, markY + 1); markY -= 13; }
       if (e.accent) { g.strokeStyle = "#e8ebf0"; g.lineWidth = 2; g.beginPath(); g.moveTo(x - 5, markY - 7); g.lineTo(x + 4, markY - 3.5); g.lineTo(x - 5, markY); g.stroke(); }
       if (e.ghost) { g.fillStyle = COLORS.idle; g.font = "15px system-ui"; g.fillText("(", x - 11, y + 5); g.fillText(")", x + 11, y + 5); }
       if (e.label) { g.fillStyle = COLORS.idle; g.font = "12px system-ui"; g.fillText(e.label, x, Y0 + 28); }
@@ -632,14 +650,14 @@
     g.beginPath(); g.moveTo(playheadX, 40); g.lineTo(playheadX, Y0 + 54); g.stroke();
 
     if (run.active) {
-      if (!run.demo) {
+      if (!run.demo && !run.metronome) {
         const res = result();
         const s = Grader.summarise(res, { windowMs: WINDOW_MS, uptoMs: adjNow });
         $("liveAcc").textContent = s.scored ? Math.round(s.accuracy) + "%" : "–";
         $("liveCounts").textContent = s.scored ? `${s.counts.perfect} perfect · ${s.counts.good} good · ${s.counts.ok} ok · ${s.counts.miss} missed · ${s.counts.wrongVoice} wrong hi-hat · ${s.extras} extra` : "";
-        const loopNo = Math.floor((nowBeat - COUNT_IN_BEATS) / bpb);
+        const loopNo = Math.floor((nowBeat - COUNT_IN) / bpb);
         if (loopNo >= RECENT_BARS) {
-          const recent = Grader.summarise(res, { windowMs: WINDOW_MS, uptoMs: adjNow, fromMs: (COUNT_IN_BEATS + (loopNo - RECENT_BARS) * bpb) * run.msPerBeat });
+          const recent = Grader.summarise(res, { windowMs: WINDOW_MS, uptoMs: adjNow, fromMs: (COUNT_IN + (loopNo - RECENT_BARS) * bpb) * run.msPerBeat });
           $("liveRecent").innerHTML = `last ${RECENT_BARS} bars <b>${Math.round(recent.accuracy)}%</b>`;
         }
       }
@@ -692,7 +710,10 @@
   $("loops").disabled = $("loopForever").checked;
   $("startBtn").onclick = () => startRun();
   $("playBtn").onclick = () => startRun({ demo: true });
+  $("metroBtn").onclick = () => startRun({ metronome: true });
   $("stopBtn").onclick = stopRun;
+  $("clickVol").value = loadNumber("drumTrainer.clickVol", 70);
+  $("clickVol").oninput = () => { setClickVolume(); saveNumber("drumTrainer.clickVol", $("clickVol").value); };
   $("midiSel").onchange = () => attachInput(midiAccess && midiAccess.inputs.get($("midiSel").value));
   $("browserHint").textContent = navigator.platform.startsWith("Win")
     ? "Windows note: only one program can hold the module's MIDI port at a time. Close BFD Player while using this page and listen to the module's own sounds instead."
