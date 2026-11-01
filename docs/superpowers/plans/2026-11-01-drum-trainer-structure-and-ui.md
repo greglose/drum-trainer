@@ -168,24 +168,27 @@ Steps:
 Acceptance: `npm run smoke` runs all seven; axe clean.
 Commit: `Split the smoke test by scenario and add an axe check`.
 
-## Task 6: Tokens, chosen skin, brand bar, control shapes (UI step 1)
+## Task 6: Skins into their own file, brand bar, control shapes (UI step 1)
 
-Depends on: the owner's choice of default skin from the concepts page.
+Already shipped ahead of this plan (commit "Five user-selectable skins"): the five skins
+as token blocks in `app.html`, the decorative layer, the copy packs, the Theme select and
+persistence, and the canvas reading tokens through `readTheme()`. What remains:
 
-Steps:
-
-1. `src/tokens.css` partial included by the build: the chosen skin's colour tokens, the
-   grade tokens with both the colour and the shape rule noted, radii, the display font
-   stack. If the font is embedded, `src/fonts.css` with the two base64 faces (OFL licence
-   text in `THIRD-PARTY-NOTICES.md`).
+1. Move the skin token blocks and decor rules to `src/skins.css` and the copy packs to
+   `src/skins.js`, both included by the build (Task 1 structure). Adding a skin becomes
+   two blocks in two files.
 2. Restyle existing controls on the site's shapes: 44 px targets, 10 px fields, pill
    chips, segmented groups with the 2 px pressed border and check mark, `--control-border`
-   on inputs, focus rings. No layout change yet.
-3. Brand bar at the top: wordmark linking to cantlosesoftware.com, FREE TOOL pill, ridge.
-4. Contrast test: `test/tokens.test.js` parses `tokens.css` and asserts every grade token
-   and `--ink` clear 4.5:1 on `--card`, `--control-border` clears 3:1.
+   on inputs, focus rings. No layout change yet. Every rule uses skin tokens.
+3. Brand bar at the top: wordmark linking to cantlosesoftware.com, FREE TOOL pill, ridge,
+   coloured from the active skin's tokens.
+4. Contrast test: `test/skins.test.js` parses every skin block and asserts each grade
+   token and `--fg` clear 4.5:1 on `--panel` and `--staff-bg`, `--muted` 4.5:1 on
+   `--panel`, `--line` 3:1 against `--panel`; fails naming the skin and token.
+5. Optional, after the owner says so: embed the OFL display fonts (one face per skin) as
+   base64 in `src/fonts.css` with the licence text in `THIRD-PARTY-NOTICES.md`.
 
-Commit: `Adopt the <skin> theme, brand bar and shared control shapes`.
+Commit: `Skins in their own files, brand bar, shared control shapes, contrast test`.
 
 ## Task 7: Tabs and the three views (UI step 2)
 

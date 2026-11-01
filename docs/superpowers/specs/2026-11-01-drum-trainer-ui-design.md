@@ -194,12 +194,16 @@ the concepts are all SIL Open Font License, so any of them can be embedded in th
 
 ## Decisions (recorded 2026-11-01)
 
-- **One theme, not light and dark.** The page ships a single theme, chosen from the
-  hair-metal concepts. The token layer is still built as one block so the choice is a
-  one-file change and more skins can follow; no toggle, no `prefers-color-scheme` handling.
-  The site's Big Sky tokens are not adopted for the page; the brand bar and control shapes
-  from the site are kept so it still reads as a Can't Lose Software tool.
-- **Open for the owner:** which skin is the default (the concept page recommends Arena
-  Rig if only one ships), whether to embed its display font or use system fonts, the space
-  bar behaviour (proposed: toggle the run when a kit is connected), and whether the staff
-  surface is dark (all skins but Mixtape) or paper (Mixtape).
+- **Skins, user-selectable; no system light and dark.** Shipped in v0.3.x the same day:
+  all four hair-metal concepts plus Classic are real skins, chosen from a Theme select and
+  remembered per browser, Arena Rig the default. A skin is a token block on
+  `<html data-skin>`, a decorative layer, and a copy pack (mode words, tier words, report
+  heading). There is no `prefers-color-scheme` handling; Mixtape is simply a light skin.
+  The site's Big Sky tokens are not adopted; the brand bar and control shapes from the site
+  still come with UI step 1 so the page reads as a Can't Lose Software tool under any skin.
+- **Fonts:** system stacks for now (Impact or Arial Black for display, Courier for
+  Mixtape), which keeps the page free of network requests. Embedding the OFL display fonts
+  from the concepts (Bungee, Monoton, Anton, Rubik Mono One, Permanent Marker) is a later
+  polish item, about 30 KB per face.
+- **Open for the owner:** the space bar behaviour (proposed: toggle the run when a kit is
+  connected).
