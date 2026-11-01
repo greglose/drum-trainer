@@ -1,0 +1,21 @@
+{
+  "name": "drum-trainer",
+  "version": "0.2.0",
+  "description": "Practice drum patterns on an electronic kit over USB MIDI and get graded on timing, dynamics and hi-hat articulation. One HTML file, no backend.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:greglose/drum-trainer",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/*.test.js",
+    "smoke": "npm run build && node test/smoke.mjs",
+    "serve": "npm run build && npx --yes serve dist"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}
