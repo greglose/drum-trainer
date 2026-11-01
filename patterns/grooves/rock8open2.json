@@ -1,0 +1,63 @@
+{
+  "name": "Rock groove, open hi-hat on the & of 2 and & of 4",
+  "category": "grooves",
+  "author": "Can't Lose Software",
+  "order": 4,
+  "bars": 1,
+  "hits": [
+    {
+      "beat": 0,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 0.5,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 1,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 1.5,
+      "voice": "hiHatOpen"
+    },
+    {
+      "beat": 2,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 2.5,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 3,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 3.5,
+      "voice": "hiHatOpen"
+    },
+    {
+      "beat": 0,
+      "voice": "bassDrum"
+    },
+    {
+      "beat": 2,
+      "voice": "bassDrum"
+    },
+    {
+      "beat": 2.5,
+      "voice": "bassDrum"
+    },
+    {
+      "beat": 1,
+      "voice": "snare",
+      "accent": true
+    },
+    {
+      "beat": 3,
+      "voice": "snare",
+      "accent": true
+    }
+  ]
+}

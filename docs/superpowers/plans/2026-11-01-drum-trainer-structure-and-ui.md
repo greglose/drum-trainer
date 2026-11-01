@@ -1,8 +1,17 @@
 # Drum Trainer: structure, library and UI implementation plan
 
 Date: 2026-11-01
-Status: ready to start after the owner picks the default skin (Task 6 depends on it; Tasks 1
-to 5 do not).
+Status: largely done in v0.4.0 (same day). Done: Task 1 (modules, build, lint), Task 2
+(staff model with tests), Task 3 (library folder, validation, Suggest to the library,
+CONTRIBUTING and templates), Task 4 (store, run factory, scheduler, sinks, tests), the
+smoke test for every view (Task 5's scenario split and the axe check still open), the
+skins and brand bar (Task 6; the contrast test and moving skins to their own files still
+open), Tasks 7 to 11 (views, transport with steppers and tap, HUD, settings view, checklist,
+patterns view with library browser and keyboard grid, report actions, phone layout).
+Open: smoke split into per-scenario files, axe check, skins into `src/skins.css`, contrast
+test, embedded fonts, reduced-motion handling for the pulse, screen-reader summary of the
+staff. The hardware validation (Task A of the product spec) was done by the owner on the
+Nitro Pro before this work started: factory defaults confirmed.
 Specs: `../specs/2026-11-01-drum-trainer-design.md` (product; decisions recorded: no
 triplets or time signatures this phase, community patterns yes, one theme) and
 `../specs/2026-11-01-drum-trainer-ui-design.md` (UI; six migration steps, all approved).

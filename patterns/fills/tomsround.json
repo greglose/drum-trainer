@@ -1,0 +1,41 @@
+{
+  "name": "8th notes around the kit: snare, high tom, mid tom, floor to",
+  "category": "fills",
+  "author": "Can't Lose Software",
+  "order": 1,
+  "bars": 1,
+  "hits": [
+    {
+      "beat": 0,
+      "voice": "snare"
+    },
+    {
+      "beat": 0.5,
+      "voice": "snare"
+    },
+    {
+      "beat": 1,
+      "voice": "highTom"
+    },
+    {
+      "beat": 1.5,
+      "voice": "highTom"
+    },
+    {
+      "beat": 2,
+      "voice": "midTom"
+    },
+    {
+      "beat": 2.5,
+      "voice": "midTom"
+    },
+    {
+      "beat": 3,
+      "voice": "floorTom"
+    },
+    {
+      "beat": 3.5,
+      "voice": "floorTom"
+    }
+  ]
+}

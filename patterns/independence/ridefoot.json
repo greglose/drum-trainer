@@ -1,0 +1,67 @@
+{
+  "name": "Ride groove, hi-hat with foot on 2 and 4",
+  "category": "independence",
+  "author": "Can't Lose Software",
+  "order": 1,
+  "bars": 1,
+  "hits": [
+    {
+      "beat": 0,
+      "voice": "ride"
+    },
+    {
+      "beat": 0.5,
+      "voice": "ride"
+    },
+    {
+      "beat": 1,
+      "voice": "ride"
+    },
+    {
+      "beat": 1.5,
+      "voice": "ride"
+    },
+    {
+      "beat": 2,
+      "voice": "ride"
+    },
+    {
+      "beat": 2.5,
+      "voice": "ride"
+    },
+    {
+      "beat": 3,
+      "voice": "ride"
+    },
+    {
+      "beat": 3.5,
+      "voice": "ride"
+    },
+    {
+      "beat": 1,
+      "voice": "hiHatFoot"
+    },
+    {
+      "beat": 3,
+      "voice": "hiHatFoot"
+    },
+    {
+      "beat": 0,
+      "voice": "bassDrum"
+    },
+    {
+      "beat": 2,
+      "voice": "bassDrum"
+    },
+    {
+      "beat": 1,
+      "voice": "snare",
+      "accent": true
+    },
+    {
+      "beat": 3,
+      "voice": "snare",
+      "accent": true
+    }
+  ]
+}

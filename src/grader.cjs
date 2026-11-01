@@ -153,4 +153,4 @@ function summarise(result, { windowMs = 100, uptoMs = Infinity, fromMs = -Infini
 }
 
 const Grader = { TIERS, tierFor, familyOf, beatsPerLoop, appendRepeats, expandPattern, matchOne, matchHits, summarise };
-module.exports = Grader;
+if (typeof module !== "undefined") module.exports = Grader;

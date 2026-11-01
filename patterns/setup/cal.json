@@ -1,0 +1,25 @@
+{
+  "name": "Calibration: quarter notes on snare drum",
+  "category": "setup",
+  "author": "Can't Lose Software",
+  "order": 1,
+  "bars": 1,
+  "hits": [
+    {
+      "beat": 0,
+      "voice": "snare"
+    },
+    {
+      "beat": 1,
+      "voice": "snare"
+    },
+    {
+      "beat": 2,
+      "voice": "snare"
+    },
+    {
+      "beat": 3,
+      "voice": "snare"
+    }
+  ]
+}

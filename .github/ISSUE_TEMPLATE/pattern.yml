@@ -1,0 +1,43 @@
+name: Suggest a pattern for the library
+description: Offer a pattern you built in the editor. "Suggest to the library" in the app fills this in.
+title: "Pattern: "
+labels: ["pattern"]
+body:
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - grooves
+        - rudiments
+        - fills
+        - independence
+    validations:
+      required: true
+  - type: input
+    id: author
+    attributes:
+      label: Credit
+      description: How you want to be credited in the library (name or GitHub handle). Leave blank for none.
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: Where the pattern comes from, if anywhere (a rudiment number, a tradition, your own).
+  - type: textarea
+    id: pattern
+    attributes:
+      label: Pattern JSON
+      description: The pattern as the app exports it. Filled in automatically by "Suggest to the library".
+      render: json
+    validations:
+      required: true
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Checks
+      options:
+        - label: The name describes the pattern the way a chart would, with no band names, song titles or lyrics.
+          required: true
+        - label: I am happy for it to be published under the repo's MIT licence.
+          required: true

@@ -1,0 +1,73 @@
+{
+  "name": "Funk groove with ghost notes (a of 1, e of 3)",
+  "category": "grooves",
+  "author": "Can't Lose Software",
+  "order": 7,
+  "bars": 1,
+  "hits": [
+    {
+      "beat": 0,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 0.5,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 1,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 1.5,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 2,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 2.5,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 3,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 3.5,
+      "voice": "hiHatClosed"
+    },
+    {
+      "beat": 0,
+      "voice": "bassDrum"
+    },
+    {
+      "beat": 1.5,
+      "voice": "bassDrum"
+    },
+    {
+      "beat": 2.5,
+      "voice": "bassDrum"
+    },
+    {
+      "beat": 1,
+      "voice": "snare",
+      "accent": true
+    },
+    {
+      "beat": 3,
+      "voice": "snare",
+      "accent": true
+    },
+    {
+      "beat": 0.75,
+      "voice": "snare",
+      "ghost": true
+    },
+    {
+      "beat": 2.25,
+      "voice": "snare",
+      "ghost": true
+    }
+  ]
+}

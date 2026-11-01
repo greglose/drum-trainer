@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Drum Trainer</title>
+<script>
+  // Apply the saved skin before the first paint so there is no flash of the default.
+  (function () { try { var s = localStorage.getItem("drumTrainer.skin"); if (s) document.documentElement.setAttribute("data-skin", s); } catch (e) {} })();
+</script>
+<style>
+  /* ---------- Skins: one token block per <html data-skin>. The canvas reads the same variables. ----------
+     A skin is tokens, a decorative layer behind the content, and a copy pack (src/skins.js). Layout,
+     notation and scoring never change with the skin. Fonts are system stacks so the page makes no requests. */
+  :root, [data-skin="classic"] {
+    --bg: #121418; --panel: #1c2027; --line: #2c323c; --fg: #e8ebf0; --muted: #8b94a3;
+    --accent: #4fc3f7; --on-accent: #06202c; --beat: #4fc3f7; --on-beat: #06202c; --staff-bg: #0e1014; --control: #0e1014;
+    --staff-line: #3a4250; --staff-grid: #232830; --staff-bar: #55607a; --bar: #1c2027; --on-bar: #e8ebf0;
+    --perfect: #4ade80; --good: #a3e635; --ok: #fbbf24; --late: #fb923c; --miss: #f87171; --wrong: #c084fc;
+    --display: system-ui, sans-serif; --radius: 12px; --btn-radius: 999px; --glow: none;
+  }
+  [data-skin="strip"] {
+    --bg: #0b0612; --panel: #150c26; --line: #3a1f5e; --fg: #f7f1ff; --muted: #b9a6d6;
+    --accent: #ff2d95; --on-accent: #ffffff; --beat: #00e5ff; --on-beat: #031a1f; --staff-bg: #0d0718; --control: #1d1033;
+    --staff-line: #4a2a78; --staff-grid: #241440; --staff-bar: #7a4fc0; --bar: #120a22; --on-bar: #f7f1ff;
+    --perfect: #ff2d95; --good: #00e5ff; --ok: #ffd60a; --late: #ff8c42; --miss: #ff4d4d; --wrong: #b388ff;
+    --display: Impact, "Arial Black", sans-serif; --radius: 10px; --btn-radius: 8px; --glow: 0 0 18px rgba(255,45,149,.55);
+  }
+  [data-skin="leopard"] {
+    --bg: #120b05; --panel: #1b1208; --line: #4a3415; --fg: #fff3e0; --muted: #d9b98f;
+    --accent: #ff3fa4; --on-accent: #1a0010; --beat: #ffd166; --on-beat: #1a0f00; --staff-bg: #0e0803; --control: #2a1c0b;
+    --staff-line: #5a4020; --staff-grid: #2a1c0b; --staff-bar: #c59a4a; --bar: #000000; --on-bar: #fff3e0;
+    --perfect: #ff3fa4; --good: #ffd166; --ok: #f4a261; --late: #e76f51; --miss: #ff5a5a; --wrong: #c77dff;
+    --display: Impact, "Arial Black", sans-serif; --radius: 4px; --btn-radius: 4px; --glow: none;
+  }
+  [data-skin="arena"] {
+    --bg: #07080a; --panel: #111317; --line: #2a2f38; --fg: #f2f4f7; --muted: #9aa3b2;
+    --accent: #ffb703; --on-accent: #1a1200; --beat: #ffffff; --on-beat: #000000; --staff-bg: #0b0d10; --control: #171b21;
+    --staff-line: #3a414c; --staff-grid: #1c2027; --staff-bar: #6b7684; --bar: #0b0d10; --on-bar: #f2f4f7;
+    --perfect: #06d6a0; --good: #8ac926; --ok: #ffb703; --late: #fb8500; --miss: #ef476f; --wrong: #c77dff;
+    --display: Impact, "Arial Black", sans-serif; --radius: 8px; --btn-radius: 8px; --glow: 0 0 30px rgba(255,255,255,.35);
+  }
+  [data-skin="tape"] {
+    --bg: #d9d2c0; --panel: #efe9d8; --line: #b8ae95; --fg: #22201b; --muted: #5c564a;
+    --accent: #d62828; --on-accent: #ffffff; --beat: #d62828; --on-beat: #ffffff; --staff-bg: #f6f2e6; --control: #fbf8f0;
+    --staff-line: #8f8672; --staff-grid: #e2dccb; --staff-bar: #5c564a; --bar: #22201b; --on-bar: #efe9d8;
+    --perfect: #2a9d8f; --good: #5c8a3a; --ok: #a37a00; --late: #c0621f; --miss: #d62828; --wrong: #7b2cbf;
+    --display: "Courier New", Courier, monospace; --radius: 8px; --btn-radius: 4px; --glow: none;
+  }
+
+  /* ---------- Base ---------- */
+  * { box-sizing: border-box; }
+  html { scroll-padding-bottom: 180px; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 Inter, system-ui, sans-serif; }
+  [hidden] { display: none !important; }
+  .decor { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  header, nav, main { position: relative; z-index: 1; }
+  [data-skin="strip"] .decor { background:
+    linear-gradient(180deg, transparent 55%, rgba(255,45,149,.16) 100%),
+    repeating-linear-gradient(90deg, rgba(0,229,255,.10) 0 1px, transparent 1px 80px),
+    repeating-linear-gradient(180deg, rgba(0,229,255,.10) 0 1px, transparent 1px 48px);
+    -webkit-mask-image: linear-gradient(180deg, transparent 50%, #000 100%); mask-image: linear-gradient(180deg, transparent 50%, #000 100%); }
+  [data-skin="leopard"] .decor { background-color: #c9962e; background-image:
+    radial-gradient(ellipse 18px 14px at 20% 30%, #2b1a05 60%, transparent 62%), radial-gradient(ellipse 12px 16px at 60% 70%, #2b1a05 60%, transparent 62%),
+    radial-gradient(ellipse 16px 12px at 85% 20%, #2b1a05 60%, transparent 62%), radial-gradient(ellipse 14px 18px at 40% 85%, #2b1a05 60%, transparent 62%),
+    radial-gradient(ellipse 26px 22px at 20% 30%, #e0b24a 70%, transparent 72%), radial-gradient(ellipse 20px 26px at 60% 70%, #e0b24a 70%, transparent 72%);
+    background-size: 160px 140px; opacity: .2; -webkit-mask-image: linear-gradient(180deg, #000 0, transparent 360px); mask-image: linear-gradient(180deg, #000 0, transparent 360px); }
+  [data-skin="arena"] .decor { background:
+    radial-gradient(60% 50% at 20% 0%, rgba(255,0,153,.32), transparent 70%),
+    radial-gradient(60% 50% at 80% 0%, rgba(255,183,3,.32), transparent 70%),
+    radial-gradient(40% 40% at 50% 10%, rgba(0,180,255,.22), transparent 70%),
+    repeating-linear-gradient(45deg, rgba(120,130,145,.16) 0 2px, transparent 2px 22px),
+    repeating-linear-gradient(-45deg, rgba(120,130,145,.16) 0 2px, transparent 2px 22px);
+    -webkit-mask-image: linear-gradient(180deg, #000 0, #000 100px, transparent 240px); mask-image: linear-gradient(180deg, #000 0, #000 100px, transparent 240px); }
+  [data-skin="tape"] .decor { background: repeating-linear-gradient(180deg, transparent 0 6px, rgba(0,0,0,.03) 6px 7px); }
+
+  button, select, input { font: inherit; color: var(--fg); }
+  button { cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  a { color: var(--accent); }
+  .kicker { color: var(--muted); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 500; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; min-width: 0; }
+  .view { min-width: 0; }
+  .card h2 { font-size: .8rem; margin: 0 0 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .1em; }
+  .btn { min-height: 44px; padding: 0 16px; border-radius: var(--btn-radius); border: 1px solid var(--line); background: var(--control); color: var(--fg); font-family: var(--display); letter-spacing: .03em; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; box-shadow: var(--glow); }
+  .chip { min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--control); color: var(--fg); display: inline-flex; align-items: center; gap: 6px; }
+  .chip[aria-pressed="true"], .chip.on { background: var(--accent); color: var(--on-accent); border: 2px solid var(--fg); }
+  .round { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--control); color: var(--fg); font-size: 1.3rem; line-height: 1; }
+  select, input[type=number], input[type=text], input[type=search] { max-width: 100%; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); padding: 0 12px; background: var(--control); color: var(--fg); }
+  input[type=range] { accent-color: var(--accent); width: 100%; }
+  .field { display: block; margin: 10px 0; }
+  .field > span { display: block; font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .field select, .field input[type=number], .field input[type=text] { width: 100%; }
+  .note { color: var(--muted); font-size: .88rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  kbd { background: var(--control); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 12px; }
+
+  /* ---------- Brand bar and tabs ---------- */
+  .brandbar { background: var(--bar); color: var(--on-bar); padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  .brandbar-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; max-width: 1100px; margin: 0 auto; min-height: 44px; flex-wrap: wrap; }
+  .brand { display: flex; gap: 10px; align-items: center; color: var(--on-bar); text-decoration: none; font-weight: 700; }
+  .brand-tag { font: 500 .7rem/1 Inter, system-ui, sans-serif; letter-spacing: .1em; text-transform: uppercase; background: rgba(127,127,127,.25); padding: 5px 8px; border-radius: 999px; }
+  h1.app-title { font: 24px/1 var(--display); margin: 0; letter-spacing: .02em; color: var(--on-bar); }
+  [data-skin="strip"] h1.app-title { background: linear-gradient(180deg, #fff 0%, #cfd8ff 35%, #6a7bff 50%, #fff 52%, #ff2d95 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 8px rgba(255,45,149,.6)); }
+  [data-skin="leopard"] h1.app-title { color: var(--accent); text-transform: uppercase; text-shadow: 3px 3px 0 #000, 5px 5px 0 var(--beat); transform: skew(-8deg); }
+  [data-skin="arena"] h1.app-title { text-transform: uppercase; letter-spacing: .08em; text-shadow: 0 0 24px rgba(255,255,255,.35); }
+  [data-skin="tape"] h1.app-title::after { content: " side A"; font: italic 700 14px Georgia, serif; color: var(--accent); vertical-align: top; }
+  .tabs { display: flex; gap: 4px; max-width: 1100px; margin: 8px auto 0; padding: 0 16px; }
+  .tabs button { background: transparent; border: 0; border-bottom: 3px solid transparent; color: var(--muted); padding: 10px 14px; min-height: 44px; font-weight: 500; }
+  .tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+  main { max-width: 1100px; margin: 0 auto; padding: 12px 16px 120px; display: grid; gap: 16px; }
+  .view { display: grid; gap: 16px; }
+
+  /* ---------- Transport ---------- */
+  .transport { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+  .pattern-field { display: flex; flex-direction: column; gap: 4px; min-width: 260px; flex: 1 1 260px; }
+  .pattern-field select { font-weight: 600; }
+  .stepper { display: inline-flex; align-items: center; gap: 8px; }
+  .stepper .num { width: 84px; min-height: 44px; text-align: center; font: 30px/1 var(--display); padding: 0 4px; -moz-appearance: textfield; }
+  .stepper .num::-webkit-outer-spin-button, .stepper .num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .stepper small { display: block; color: var(--muted); font-size: .66rem; text-align: center; letter-spacing: .1em; text-transform: uppercase; margin-top: 2px; }
+  .toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
+  .midi-chip { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .9rem; min-height: 44px; background: transparent; border: 0; padding: 0 6px; }
+  .midi-chip .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .midi-chip[data-status="connected"] .dot { background: var(--perfect); }
+  .midi-chip[data-status="blocked"] .dot { background: var(--miss); }
+  .modes { display: flex; gap: 6px; margin-left: auto; }
+  .modes .btn { min-height: 48px; }
+  .modes .btn.primary { min-width: 140px; font-size: 1.05rem; }
+  .modes .stop { min-width: 140px; background: var(--miss); color: #fff; border-color: var(--miss); font-weight: 700; }
+
+  /* ---------- Staff and HUD ---------- */
+  .staff-card { padding: 10px 12px 8px; }
+  canvas { width: 100%; height: 340px; display: block; border-radius: calc(var(--radius) - 4px); background: var(--staff-bg); }
+  #live { display: flex; gap: 24px; align-items: baseline; margin-top: 8px; min-height: 40px; flex-wrap: wrap; }
+  #live .big { font: 44px/1 var(--display); min-width: 110px; }
+  #live .big small, #live .recent small { display: block; font: 500 .66rem/1.4 Inter, system-ui, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  #live .recent { font: 28px/1 var(--display); }
+  #feedback { font: 22px/1.2 var(--display); letter-spacing: .02em; }
+  .perfect { color: var(--perfect); } .good { color: var(--good); } .ok { color: var(--ok); } .late-ish { color: var(--late); } .miss { color: var(--miss); } .wrong { color: var(--wrong); } .demo { color: var(--beat); }
+  #liveCounts { color: var(--muted); font-size: .88rem; }
+  .status-line { color: var(--muted); font-size: .85rem; display: flex; gap: 16px; flex-wrap: wrap; margin-top: 6px; }
+  .status-line b { color: var(--fg); font-weight: 600; }
+
+  /* ---------- Report ---------- */
+  #reportBody { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+  /* ---------- Checklist ---------- */
+  .check ul { list-style: none; padding: 0; margin: 8px 0 0; }
+  .check li { display: flex; gap: 10px; align-items: center; min-height: 40px; flex-wrap: wrap; }
+  .tick { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--muted); display: inline-grid; place-items: center; font-size: 13px; color: transparent; }
+  .tick.done { background: var(--perfect); border-color: var(--perfect); color: #fff; }
+
+  /* ---------- Patterns view ---------- */
+  .two { grid-template-columns: 320px 1fr; }
+  .lib .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .lib input[type=search] { width: 100%; }
+  .rows { display: grid; gap: 2px; max-height: 60vh; overflow: auto; }
+  .rows button { display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; width: 100%; padding: 10px 8px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--fg); border-radius: 6px; min-height: 44px; }
+  .rows button[aria-selected="true"] { background: var(--control); }
+  .rows .badge { font-size: .72rem; background: var(--line); color: var(--fg); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+  .star { background: transparent; border: 0; color: var(--muted); font-size: 1.1rem; padding: 0 4px; min-width: 32px; min-height: 32px; }
+  .star[aria-pressed="true"] { color: var(--ok); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .toolbar input[type=text] { width: 220px; }
+  .toolbar .stepper .num { font-size: 22px; width: 56px; }
+  .ed-wrap { overflow-x: auto; padding-bottom: 6px; }
+  #edGrid { border-collapse: separate; border-spacing: 2px; width: auto; font-size: 12px; }
+  #edGrid th, #edGrid td { padding: 0; border: 0; text-align: center; }
+  #edGrid th.ed-voice { text-align: right; padding-right: 8px; white-space: nowrap; color: var(--muted); font-weight: 500; position: sticky; left: 0; background: var(--panel); }
+  #edGrid td.beat, #edGrid th.beat { padding-left: 6px; }
+  #edGrid td.bar, #edGrid th.bar { padding-left: 14px; }
+  #edGrid th.ed-bar { text-align: left; color: var(--fg); padding: 2px 0 2px 14px; font-weight: 600; }
+  #edGrid th.ed-count { color: var(--muted); font-weight: 400; }
+  #edGrid th.ed-count.beat { color: var(--fg); font-weight: 600; }
+  .cell { width: 28px; height: 28px; padding: 0; border-radius: 6px; border: 1px solid var(--line); background: var(--control); color: var(--on-accent); font-weight: 700; font-size: 11px; line-height: 1; }
+  .cell[data-state=plain] { background: var(--accent); border-color: var(--accent); }
+  .cell[data-state=accent] { background: var(--perfect); border-color: var(--perfect); }
+  .cell[data-state=ghost] { background: transparent; border-color: var(--accent); color: var(--accent); }
+  .cell:focus-visible { outline-offset: 0; }
+  .stick { width: 28px; height: 26px; text-align: center; padding: 0; font-size: 12px; background: var(--control); color: var(--fg); border: 1px solid var(--line); border-radius: 4px; text-transform: uppercase; min-height: 0; }
+
+  /* ---------- Kit and settings ---------- */
+  .settings { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+  .map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .map-cell { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; cursor: pointer; min-height: 44px; }
+  .map-cell.listening { border-color: var(--accent); box-shadow: 0 0 0 2px var(--line); }
+  .map-cell small { display: block; color: var(--muted); }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 600; z-index: 5; }
+
+  /* ---------- Phone ---------- */
+  .bottombar { display: none; }
+  @media (max-width: 999px) { .two { grid-template-columns: 1fr; } }
+  @media (max-width: 699px) {
+    .tabs { display: none; }
+    .bottombar { display: flex; position: fixed; bottom: 0; left: 0; right: 0; background: var(--panel); border-top: 1px solid var(--line); justify-content: space-around; padding: 6px 0 10px; z-index: 3; }
+    .bottombar button { background: none; border: 0; color: var(--muted); font-size: .75rem; min-width: 64px; min-height: 44px; }
+    .bottombar button[aria-selected="true"] { color: var(--fg); font-weight: 700; }
+    .brandbar-row { gap: 8px; }
+    .transport { position: fixed; bottom: 62px; left: 0; right: 0; background: var(--panel); border-top: 1px solid var(--line); border-radius: 0; padding: 10px 12px; z-index: 2; gap: 10px; }
+    .transport .loops, .transport .midi-chip, .transport #tapBtn { display: none; }
+    .pattern-field { min-width: 0; flex-basis: 100%; }
+    .modes { margin-left: 0; flex: 1; }
+    .modes .btn { flex: 1; padding: 0 8px; }
+    .modes .btn.primary, .modes .stop { min-width: 0; }
+    canvas { height: 300px; }
+    #live .big { font-size: 36px; }
+    main { padding-bottom: 230px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+</style>
+</head>
+<body>
+<div class="decor" aria-hidden="true"></div>
+<header class="brandbar">
+  <div class="brandbar-row">
+    <a class="brand" href="https://cantlosesoftware.com/"><span class="brand-name">Can't Lose Software</span><span class="brand-tag">Free tool</span></a>
+    <h1 class="app-title">Drum Trainer</h1>
+  </div>
+</header>
+<nav class="tabs" role="tablist" aria-label="Views">
+  <button role="tab" id="tab-practice" data-view="practice" aria-selected="true" aria-controls="view-practice">Practice</button>
+  <button role="tab" id="tab-patterns" data-view="patterns" aria-selected="false" aria-controls="view-patterns">Patterns</button>
+  <button role="tab" id="tab-settings" data-view="settings" aria-selected="false" aria-controls="view-settings">Kit and settings</button>
+</nav>
+
+<main id="main">
+  <!-- ---------- Practice ---------- -->
+  <section class="view" id="view-practice" role="tabpanel" aria-labelledby="tab-practice">
+    <div class="card transport" id="transport">
+      <label class="pattern-field"><span class="kicker">Pattern</span><select id="patternSel" aria-label="Pattern"></select></label>
+      <div class="stepper" data-stepper="bpm">
+        <button type="button" class="round" data-delta="-1" aria-label="Slower">&minus;</button>
+        <div><input id="bpm" class="num" type="number" min="40" max="240" value="90" aria-label="Tempo, quarter notes per minute" /><small>quarter note</small></div>
+        <button type="button" class="round" data-delta="1" aria-label="Faster">+</button>
+        <button type="button" class="chip" id="tapBtn" title="Tap the tempo">Tap</button>
+      </div>
+      <div class="stepper loops" data-stepper="loops">
+        <button type="button" class="round" data-delta="-1" aria-label="Fewer loops">&minus;</button>
+        <div><input id="loops" class="num" type="number" min="1" max="999" value="4" aria-label="Loops" /><small>loops</small></div>
+        <button type="button" class="round" data-delta="1" aria-label="More loops">+</button>
+        <label class="chip toggle"><input id="loopForever" type="checkbox" /> until Stop</label>
+      </div>
+      <button type="button" class="midi-chip" id="midiChip" data-status="none" title="Open Kit and settings"><span class="dot"></span><span id="midiState">connecting…</span></button>
+      <div class="modes" id="modes">
+        <button type="button" class="btn" id="metroBtn" title="Click only, at this tempo">Metronome</button>
+        <button type="button" class="btn" id="playBtn" title="Hear the pattern played at this tempo">Play pattern</button>
+        <button type="button" class="btn primary" id="startBtn">Start</button>
+        <button type="button" class="btn stop" id="stopBtn" hidden disabled>Stop</button>
+      </div>
+    </div>
+
+    <div class="card staff-card">
+      <canvas id="staff" width="1200" height="340" aria-label="Drum staff"></canvas>
+      <div id="live">
+        <div class="big" id="liveAcc">–</div>
+        <div class="recent" id="liveRecent"></div>
+        <div id="feedback" aria-live="polite"></div>
+        <div id="liveCounts"></div>
+      </div>
+    </div>
+
+    <div class="card" id="report" hidden>
+      <h2 id="reportTitle">Last run</h2>
+      <div id="reportBody"></div>
+      <div class="actions">
+        <button type="button" class="btn primary" id="againBtn">Again</button>
+        <button type="button" class="btn" id="slowerBtn">Slower (-5)</button>
+        <button type="button" class="btn" id="fasterBtn">Faster (+5)</button>
+        <button type="button" class="btn" id="editBtn">Edit pattern</button>
+      </div>
+    </div>
+
+    <div class="card check" id="checklist" hidden>
+      <h2>Getting set up</h2>
+      <ul>
+        <li><span class="tick" id="chk-kit">&#10003;</span> <span>Kit connected by USB and MIDI allowed in the browser</span></li>
+        <li><span class="tick" id="chk-pads">&#10003;</span> <span>Pads checked</span> <button type="button" class="chip" id="padsOkBtn">The factory map is right</button> <button type="button" class="chip" data-view="settings">Learn pads</button></li>
+        <li><span class="tick" id="chk-cal">&#10003;</span> <span>Latency calibrated</span> <button type="button" class="chip" id="calBtn">Run calibration</button></li>
+      </ul>
+      <p class="note">Once these are done this card goes away. <button type="button" class="chip" id="dismissChecklist">Dismiss</button></p>
+    </div>
+
+    <p class="note">Notation follows the Percussive Arts Society standard: cymbals are x noteheads, drums are round; bass drum sits in the first space,
+      snare in the third, toms above it, ride on the top line, hi-hat above the staff, crash on the ledger line, foot hi-hat below the staff.
+      <b>o</b> = open hi-hat, <b>+</b> = closed, <b>&gt;</b> = accent, ( ) = ghost note, R/L = sticking. Counts read 1 e &amp; a.</p>
+  </section>
+
+  <!-- ---------- Patterns ---------- -->
+  <section class="view two" id="view-patterns" role="tabpanel" aria-labelledby="tab-patterns" hidden>
+    <div class="card lib">
+      <h2>Library</h2>
+      <input id="libSearch" type="search" placeholder="Search patterns" aria-label="Search patterns" />
+      <div class="chips" id="libChips" role="group" aria-label="Category"></div>
+      <div class="rows" id="libRows" role="listbox" aria-label="Patterns"></div>
+    </div>
+    <div class="card" id="editor">
+      <h2>Pattern editor</h2>
+      <div class="toolbar">
+        <input id="edName" type="text" maxlength="60" placeholder="Name this pattern" aria-label="Pattern name" />
+        <div class="stepper" data-stepper="edBars">
+          <button type="button" class="round" data-delta="-1" aria-label="Fewer bars">&minus;</button>
+          <div><input id="edBars" class="num" type="number" min="1" max="8" value="1" aria-label="Bars" /><small>bars</small></div>
+          <button type="button" class="round" data-delta="1" aria-label="More bars">+</button>
+        </div>
+        <button type="button" class="btn" id="edNew">New</button>
+        <button type="button" class="btn" id="edLoad">Edit selected pattern</button>
+        <button type="button" class="btn" id="edDup" title="Copy the last bar into a new bar">Duplicate last bar</button>
+        <button type="button" class="btn" id="edClear" title="Clear the last bar">Clear last bar</button>
+        <button type="button" class="btn primary" id="edSave">Save</button>
+        <button type="button" class="btn" id="edSavePlay">Save and play</button>
+        <button type="button" class="btn" id="edDelete" disabled>Delete</button>
+        <button type="button" class="btn" id="edExport">Export my patterns</button>
+        <button type="button" class="btn" id="edImport">Import</button>
+        <a class="btn" id="edSuggest" href="#" target="_blank" rel="noopener" hidden>Suggest to the library</a>
+        <input id="edFile" type="file" accept="application/json,.json" hidden />
+      </div>
+      <div class="ed-wrap"><table id="edGrid"></table></div>
+      <p class="note">Sixteenth-note grid in 4/4, up to eight bars. Click a cell for a note, again for an accent (&gt;), again for a ghost note ( ), again to clear.
+        Arrow keys move, space cycles, R or L types the sticking. Saved patterns appear under My patterns and live in this browser; Export writes them to a file you can import elsewhere.</p>
+      <p class="note" id="edStatus" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <!-- ---------- Kit and settings ---------- -->
+  <section class="view settings" id="view-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+    <div class="card">
+      <h2>Connection</h2>
+      <label class="field"><span>MIDI input</span><select id="midiSel"><option value="">(none found)</option></select></label>
+      <p class="note">Last note: <b id="lastNote">–</b></p>
+      <label class="field"><span>Keyboard kit</span>
+        <select id="kbKit"><option value="auto">Only when no kit is connected</option><option value="always">Always</option><option value="never">Never</option></select></label>
+      <p class="note"><kbd>space</kbd> bass drum, <kbd>J</kbd> snare, <kbd>F</kbd> closed hi-hat, <kbd>G</kbd> open hi-hat, <kbd>D</kbd> foot hi-hat, <kbd>R</kbd> <kbd>T</kbd> <kbd>Y</kbd> toms, <kbd>U</kbd> crash, <kbd>I</kbd> ride.
+        With a kit connected and the keyboard kit off, <kbd>space</kbd> starts and stops, <kbd>Esc</kbd> stops.</p>
+      <p class="note" id="browserHint"></p>
+    </div>
+    <div class="card">
+      <h2>Sound</h2>
+      <label class="field"><span>Playback sound</span><select id="soundSel"><option value="synth">Built-in sounds</option></select></label>
+      <label class="field"><span>Click volume</span><input id="clickVol" type="range" min="0" max="100" value="70" /></label>
+      <p class="note">Playback performs the pattern through the built-in kit, or through the module's own sounds when it is chosen above (the page sends it MIDI). At zero click volume you practise against a silent beat and are still graded.</p>
+    </div>
+    <div class="card">
+      <h2>Timing</h2>
+      <label class="field"><span>Latency offset (ms)</span><input id="cal" type="number" min="-200" max="200" value="0" /></label>
+      <button type="button" class="btn" id="calBtn2">Run calibration</button>
+      <p class="note">Plays quarter notes on the snare; the report then offers your mean offset as the latency offset, which removes the module's and the USB chain's delay from every score.</p>
+      <label class="field"><span>Visual offset (ms)</span><input id="vis" type="number" min="-400" max="400" step="10" value="0" /></label>
+      <button type="button" class="btn" id="syncBtn">Sync by eye</button>
+      <p class="note">Runs the metronome for eight bars. Raise the offset when the beat flash comes before the click (usual with Bluetooth), lower it when the click comes first. Display only; scoring is unaffected.
+        Browser reports: <b id="latency">–</b>.</p>
+    </div>
+    <div class="card">
+      <h2>Pads</h2>
+      <div class="map-grid" id="mapGrid"></div>
+      <p class="note">Click a pad, then hit it on the kit to learn its MIDI note. Defaults are the Alesis Nitro factory map. Open/closed hi-hat from: <b id="hatMode">note number</b> · pedal: <b id="pedalState">no controller data yet</b>.
+        If the module sends one note for both hi-hats, learn both to that note and the pedal (controller 4) decides: pressed = closed.</p>
+    </div>
+    <div class="card">
+      <h2>Appearance</h2>
+      <label class="field"><span>Theme</span><select id="skinSel"></select></label>
+      <p class="note">Skins change colours, decoration and the words on the buttons and in the scores. Notation, thresholds and grading do not change.</p>
+    </div>
+    <div class="card">
+      <h2>About</h2>
+      <p class="note">Drum Trainer <span id="version"></span> · free and open source (MIT) · everything stays in this browser; nothing is sent anywhere.
+        <a href="https://github.com/greglose/drum-trainer">Source on GitHub</a> · a <a href="https://cantlosesoftware.com/tools/">Can't Lose Software free tool</a>.</p>
+    </div>
+  </section>
+</main>
+
+<nav class="bottombar" role="tablist" aria-label="Views">
+  <button role="tab" data-view="practice" aria-selected="true">Practice</button>
+  <button role="tab" data-view="patterns" aria-selected="false">Patterns</button>
+  <button role="tab" data-view="settings" aria-selected="false">Kit</button>
+</nav>
+
+<script>
+/* @include grader.cjs */
+/* @include patterns.cjs */
+/* @include library */
+/* @include skins.cjs */
+/* @include storage.cjs */
+/* @include store.cjs */
+/* @include staff-model.cjs */
+/* @include scheduler.cjs */
+/* @include run.cjs */
+/* @include audio.js */
+/* @include sinks.js */
+/* @include midi.js */
+/* @include staff-view.js */
+/* @include report-view.js */
+/* @include editor-model.cjs */
+/* @include editor-view.js */
+/* @include app.js */
+</script>
+</body>
+</html>

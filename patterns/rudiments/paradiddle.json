@@ -1,0 +1,94 @@
+{
+  "name": "Single Paradiddle, 16th notes (RLRR LRLL)",
+  "category": "rudiments",
+  "author": "Can't Lose Software",
+  "order": 3,
+  "bars": 1,
+  "hits": [
+    {
+      "beat": 0,
+      "voice": "snare",
+      "accent": true,
+      "label": "R"
+    },
+    {
+      "beat": 0.25,
+      "voice": "snare",
+      "label": "L"
+    },
+    {
+      "beat": 0.5,
+      "voice": "snare",
+      "label": "R"
+    },
+    {
+      "beat": 0.75,
+      "voice": "snare",
+      "label": "R"
+    },
+    {
+      "beat": 1,
+      "voice": "snare",
+      "accent": true,
+      "label": "L"
+    },
+    {
+      "beat": 1.25,
+      "voice": "snare",
+      "label": "R"
+    },
+    {
+      "beat": 1.5,
+      "voice": "snare",
+      "label": "L"
+    },
+    {
+      "beat": 1.75,
+      "voice": "snare",
+      "label": "L"
+    },
+    {
+      "beat": 2,
+      "voice": "snare",
+      "accent": true,
+      "label": "R"
+    },
+    {
+      "beat": 2.25,
+      "voice": "snare",
+      "label": "L"
+    },
+    {
+      "beat": 2.5,
+      "voice": "snare",
+      "label": "R"
+    },
+    {
+      "beat": 2.75,
+      "voice": "snare",
+      "label": "R"
+    },
+    {
+      "beat": 3,
+      "voice": "snare",
+      "accent": true,
+      "label": "L"
+    },
+    {
+      "beat": 3.25,
+      "voice": "snare",
+      "label": "R"
+    },
+    {
+      "beat": 3.5,
+      "voice": "snare",
+      "label": "L"
+    },
+    {
+      "beat": 3.75,
+      "voice": "snare",
+      "label": "L"
+    }
+  ],
+  "source": "PAS International Drum Rudiments, 16: Single Paradiddle"
+}
