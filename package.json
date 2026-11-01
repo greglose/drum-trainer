@@ -1,6 +1,6 @@
 {
   "name": "drum-trainer",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Practice drum patterns on an electronic kit over USB MIDI and get graded on timing, dynamics and hi-hat articulation. One HTML file, no backend.",
   "private": true,
   "type": "module",
