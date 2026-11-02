@@ -15,7 +15,7 @@ const ReportView = (() => {
     const length = run.loops
       ? (barsPerLoop > 1 ? `${run.loops} loop${run.loops === 1 ? "" : "s"} of ${barsPerLoop} bars` : `${run.loops} bar${run.loops === 1 ? "" : "s"}`)
       : "stopped before the first pass finished";
-    const calibration = run.pattern.id === "cal" && s.scored ? `<button id="applyCal">Use ${fmt(s.meanOffsetMs)} ms as latency offset</button>` : "";
+    const calibration = run.pattern.id === "cal" && s.scored ? `<button type="button" class="btn" id="applyCal">Use ${fmt(s.meanOffsetMs)} ms as latency offset</button>` : "";
     return `
       <p><strong style="font-size:26px">${Math.round(s.accuracy)}%</strong> &nbsp; ${run.pattern.name} · quarter note = ${run.bpm} · ${length}</p>
       <p>${countsLine}</p>
