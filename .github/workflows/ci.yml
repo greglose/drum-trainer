@@ -18,10 +18,10 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: node test/smoke.mjs
+      - run: node test/smoke/run.mjs
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: smoke-screenshots
-          path: test/*.png
+          path: test/shots/*.png
           if-no-files-found: ignore

@@ -8,10 +8,16 @@ smoke test for every view (Task 5's scenario split and the axe check still open)
 skins and brand bar (Task 6; the contrast test and moving skins to their own files still
 open), Tasks 7 to 11 (views, transport with steppers and tap, HUD, settings view, checklist,
 patterns view with library browser and keyboard grid, report actions, phone layout).
-Open: smoke split into per-scenario files, axe check, skins into `src/skins.css`, contrast
-test, embedded fonts, reduced-motion handling for the pulse, screen-reader summary of the
-staff. The hardware validation (Task A of the product spec) was done by the owner on the
-Nitro Pro before this work started: factory defaults confirmed.
+v0.5.0 (2026-11-02) closed the rest: the smoke test is `test/smoke/` with a shared helper
+and nine scenario files run by `run.mjs` against one browser; scenario 09 runs axe (WCAG 2.1
+A and AA) on every view, every skin, during a run, with the report, and at phone width; the
+skins live in `src/skins.css` with a `--control-border` token per skin and `test/skins.test.js`
+enforcing the contrast rules in the file's header; the five OFL display fonts are embedded
+by the build from the `@fontsource` packages (`THIRD-PARTY-NOTICES.md`); the beat pulse is
+on-or-off under `prefers-reduced-motion`; the staff canvas carries a spoken description of
+the selected pattern. Nothing from this plan remains open. The hardware validation (Task A
+of the product spec) was done by the owner on the Nitro Pro before this work started:
+factory defaults confirmed.
 Specs: `../specs/2026-11-01-drum-trainer-design.md` (product; decisions recorded: no
 triplets or time signatures this phase, community patterns yes, one theme) and
 `../specs/2026-11-01-drum-trainer-ui-design.md` (UI; six migration steps, all approved).

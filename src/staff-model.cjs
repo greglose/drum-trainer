@@ -89,12 +89,40 @@ const StaffModel = (() => {
     return "upcoming";
   }
 
-  /** Beat pulse strength 0..1, fading over 150 ms after each beat. */
-  function pulseAt(nowMs, nowBeat, msPerBeat, totalBeats) {
+  /** Beat pulse strength 0..1, fading over 150 ms after each beat; with `reduced` it is on or off, no fade. */
+  function pulseAt(nowMs, nowBeat, msPerBeat, totalBeats, reduced = false) {
     const phase = nowBeat - Math.floor(nowBeat);
-    return nowMs >= 0 && nowBeat < totalBeats ? Math.max(0, 1 - (phase * msPerBeat) / 150) : 0;
+    if (!(nowMs >= 0 && nowBeat < totalBeats)) return 0;
+    const sinceBeatMs = phase * msPerBeat;
+    if (reduced) return sinceBeatMs < 150 ? 1 : 0;
+    return Math.max(0, 1 - sinceBeatMs / 150);
   }
 
-  return { STAFF_POS, STAFF_LABEL, ALL_FAMILIES, STEP, Y0, X0, VIEW_BEATS, PAST_BEATS, SYLLABLES, yFor, posOf, familyOf, subdivisionOf, familiesOf, labelLayout, countLabel, barLabel, geometry, marksFor, noteState, pulseAt };
+  /** The counts a beat position reads as, e.g. 1.5 -> "& of 1", 2.75 -> "a of 3", 3 -> "3". */
+  function countName(beat, beatsPerBar = 4) {
+    const inBar = ((beat % beatsPerBar) + beatsPerBar) % beatsPerBar;
+    const whole = Math.floor(inBar) + 1;
+    const frac = Math.round((inBar % 1) * 4);
+    return frac === 0 ? String(whole) : `${["", "e", "&", "a"][frac]} of ${whole}`;
+  }
+
+  /** A spoken description of a pattern for assistive technology: one sentence per voice, bar by bar. */
+  function describe(pattern, voiceLabel) {
+    if (!pattern) return "Metronome: click only.";
+    const bars = pattern.bars || 1;
+    const byVoice = new Map();
+    for (const h of [...pattern.hits].sort((a, b) => a.beat - b.beat)) {
+      if (!byVoice.has(h.voice)) byVoice.set(h.voice, []);
+      const bar = bars > 1 ? `bar ${Math.floor(h.beat / 4) + 1} ` : "";
+      const flags = [h.accent ? "accented" : "", h.ghost ? "ghost" : "", h.label ? h.label === "R" ? "right" : "left" : ""].filter(Boolean);
+      byVoice.get(h.voice).push(`${bar}${countName(h.beat)}${flags.length ? " (" + flags.join(", ") + ")" : ""}`);
+    }
+    const parts = [...byVoice.entries()]
+      .sort((a, b) => STAFF_POS[familyOf(b[0])] - STAFF_POS[familyOf(a[0])])
+      .map(([voice, counts]) => `${voiceLabel[voice] || voice} on ${counts.join(", ")}`);
+    return `${pattern.name}, ${bars} bar${bars === 1 ? "" : "s"} of 4/4. ${parts.join(". ")}.`;
+  }
+
+  return { STAFF_POS, STAFF_LABEL, ALL_FAMILIES, STEP, Y0, X0, VIEW_BEATS, PAST_BEATS, SYLLABLES, yFor, posOf, familyOf, subdivisionOf, familiesOf, labelLayout, countLabel, barLabel, geometry, marksFor, noteState, pulseAt, countName, describe };
 })();
 if (typeof module !== "undefined") module.exports = StaffModel;

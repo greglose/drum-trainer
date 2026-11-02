@@ -1,4 +1,5 @@
 node_modules/
 dist/
 test/*.png
+test/shots/
 .DS_Store

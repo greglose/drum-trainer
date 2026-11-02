@@ -3,6 +3,7 @@
 //   the CommonJS tail the pure modules carry for node tests stripped.
 // - `/* @include library */` is replaced by `const LIBRARY = [...]`: every patterns/<category>/*.json
 //   validated through Patterns.normalizePattern and sorted; a bad file fails the build by name.
+// - `/* @include fonts.css */` is generated from the @fontsource packages; other `.css` includes are inserted raw.
 // - `__VERSION__` in app.js becomes the package version.
 // No dependencies beyond node itself.
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync } from "node:fs";
@@ -46,6 +47,24 @@ export function loadLibrary() {
   return out;
 }
 
+// Display fonts embedded as base64 @font-face rules, read from the @fontsource packages (SIL OFL;
+// see THIRD-PARTY-NOTICES.md). A missing package drops that face and its skin falls back to system fonts.
+const FONTS = [
+  ["Bungee", "@fontsource/bungee/files/bungee-latin-400-normal.woff2"],
+  ["Monoton", "@fontsource/monoton/files/monoton-latin-400-normal.woff2"],
+  ["Anton", "@fontsource/anton/files/anton-latin-400-normal.woff2"],
+  ["Rubik Mono One", "@fontsource/rubik-mono-one/files/rubik-mono-one-latin-400-normal.woff2"],
+  ["Permanent Marker", "@fontsource/permanent-marker/files/permanent-marker-latin-400-normal.woff2"],
+];
+export function fontsCss() {
+  return FONTS.map(([family, rel]) => {
+    const path = join(root, "node_modules", rel);
+    if (!existsSync(path)) return `/* ${family}: package not installed, system fallback */`;
+    const b64 = readFileSync(path).toString("base64");
+    return `@font-face { font-family: "${family}"; font-style: normal; font-weight: 400; font-display: swap; src: url(data:font/woff2;base64,${b64}) format("woff2"); }`;
+  }).join("\n");
+}
+
 export function build() {
   const page = readFileSync(join(root, "src/page.html"), "utf8");
   const library = loadLibrary();
@@ -53,7 +72,9 @@ export function build() {
   const html = page.replace(/^[ \t]*\/\* @include (\S+) \*\/[ \t]*$/gm, (_, name) => {
     includes++;
     if (name === "library") return `const LIBRARY = ${JSON.stringify(library)};`;
+    if (name === "fonts.css") return fontsCss();
     const path = join(root, "src", name);
+    if (name.endsWith(".css")) { if (!existsSync(path)) throw new Error(`include not found: src/${name}`); return readFileSync(path, "utf8"); }
     if (!existsSync(path)) throw new Error(`include not found: src/${name}`);
     let src = readFileSync(path, "utf8").replace(/^(if \(typeof module !== "undefined"\) )?module\.exports = \w+;\s*$/m, "");
     if (name === "app.js") src = src.replace("__VERSION__", version);

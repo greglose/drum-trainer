@@ -81,18 +81,18 @@
       .filter((p) => !q || p.name.toLowerCase().includes(q))
       .sort((a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)));
     $("libRows").innerHTML = rows.map((p) => `
-      <button type="button" role="option" data-id="${p.id}" aria-selected="${p.id === pattern}">
-        <span>${p.name}</span>
-        <span class="row"><span class="badge">${p.bars > 1 ? p.bars + " bars" : categoryOf(p)}</span>
-        <span class="star" role="button" tabindex="0" data-fav="${p.id}" aria-pressed="${favorites.has(p.id)}" aria-label="Favourite">&#9733;</span></span>
-      </button>`).join("") || `<p class="note">No patterns match.</p>`;
+      <li class="librow">
+        <button type="button" class="rowbtn" data-id="${p.id}" aria-current="${p.id === pattern ? "true" : "false"}">
+          <span>${p.name}</span><span class="badge">${p.bars > 1 ? p.bars + " bars" : categoryOf(p)}</span>
+        </button>
+        <button type="button" class="star" data-fav="${p.id}" aria-pressed="${favorites.has(p.id)}" aria-label="Favourite ${p.name}">&#9733;</button>
+      </li>`).join("") || `<li class="note">No patterns match.</li>`;
   }
   $("libChips").addEventListener("click", (e) => { const b = e.target.closest("[data-cat]"); if (b) { store.set({ libCategory: b.dataset.cat }); renderLibrary(); } });
   $("libSearch").oninput = () => { store.set({ libSearch: $("libSearch").value }); renderLibrary(); };
   $("libRows").addEventListener("click", (e) => {
     const star = e.target.closest("[data-fav]");
     if (star) {
-      e.stopPropagation();
       const id = star.dataset.fav;
       if (favorites.has(id)) favorites.delete(id); else favorites.add(id);
       settings.set("favorites", JSON.stringify([...favorites]));
@@ -104,7 +104,7 @@
     selectPattern(row.dataset.id);
     editor.load(findPattern(row.dataset.id));
   });
-  function selectPattern(id) { store.set({ pattern: id }); $("patternSel").value = id; renderLibrary(); }
+  function selectPattern(id) { store.set({ pattern: id }); $("patternSel").value = id; renderLibrary(); describeStaff(findPattern(id)); }
   $("patternSel").onchange = () => selectPattern($("patternSel").value);
 
   // ---------- skins ----------
@@ -269,7 +269,10 @@
   }
 
   // ---------- runs ----------
-  const staff = StaffView.create($("staff"), { model: StaffModel, cymbals: Patterns.CYMBALS, windowMs: Run.WINDOW_MS });
+  const reducedMotion = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
+  const staff = StaffView.create($("staff"), { model: StaffModel, cymbals: Patterns.CYMBALS, windowMs: Run.WINDOW_MS, reducedMotion: () => reducedMotion.matches });
+  // The canvas is described in words for assistive technology: the pattern, voice by voice.
+  const describeStaff = (pattern) => $("staff").setAttribute("aria-label", "Drum staff. " + StaffModel.describe(pattern, Patterns.VOICE_LABEL));
   const IDLE_MESSAGE = "Pick a pattern and tempo. Play pattern lets you hear it; Start gives one bar of count-in, then play along with the click.";
   let run = null;
   let scheduler = null;
@@ -298,6 +301,7 @@
     if (!run.forever) endTimer = setTimeout(finishRun, run.totalBeats * run.msPerBeat + run.endDelayMs());
 
     const c = Skins.get(s.skin);
+    describeStaff(pattern);
     $("report").hidden = true;
     setRunning(true);
     $("feedback").className = ""; $("feedback").textContent = ""; $("liveRecent").textContent = ""; $("liveCounts").textContent = "";
@@ -468,6 +472,7 @@
   renderPatternSelect();
   editor.render();
   renderMap(); renderPedal(); renderChecklist(); renderLibrary();
+  describeStaff(findPattern(S().pattern));
   applySkin(S().skin);
   showView(["practice", "patterns", "settings"].includes(S().view) ? S().view : "practice");
   initMidi();

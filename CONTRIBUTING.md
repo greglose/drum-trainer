@@ -55,7 +55,7 @@ No band names, song titles, lyrics or trademarks in names or authors.
 
 - `npm install`, then `npm run check` runs lint, the unit tests and the browser smoke test.
 - Pure modules (`src/*.cjs`) have unit tests in `test/`; the page and its wiring are covered
-  by `test/smoke.mjs`. Add or extend a test with every change.
+  by `test/smoke/`. Add or extend a test with every change.
 - Keep the one-file build: `scripts/build.mjs` concatenates `src/` into `dist/index.html`
   with no bundler and no runtime dependency.
 - Nothing may send data anywhere. The privacy sentence on the landing page is literal.

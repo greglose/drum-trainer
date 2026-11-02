@@ -4,7 +4,7 @@
 // refreshes when the skin changes. Makes no decisions about positions, states or labels.
 // Browser only.
 const StaffView = (() => {
-  function create(canvas, { model, cymbals, windowMs }) {
+  function create(canvas, { model, cymbals, windowMs, reducedMotion = () => false }) {
     const g = canvas.getContext("2d");
     let C = null;
     const { X0, Y0, yFor } = model;
@@ -65,7 +65,7 @@ const StaffView = (() => {
       g.fillText(`${bpb}/4 · quarter note = ${run.bpm}` + (run.demo ? " · playback" : run.metronome ? " · metronome" : ""), 8, 22);
       // Beat pulse and beat number
       const beatIdx = Math.floor(nowBeat);
-      const pulse = model.pulseAt(nowMs, nowBeat, run.msPerBeat, run.totalBeats);
+      const pulse = model.pulseAt(nowMs, nowBeat, run.msPerBeat, run.totalBeats, reducedMotion());
       const downbeat = ((beatIdx % bpb) + bpb) % bpb === 0;
       if (pulse > 0) {
         g.globalAlpha = pulse * (downbeat ? 0.95 : 0.7);
