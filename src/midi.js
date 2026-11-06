@@ -10,6 +10,8 @@ const Midi = (() => {
   let current = null;
 
   const supported = () => typeof navigator !== "undefined" && !!navigator.requestMIDIAccess;
+  // Every iPhone and iPad browser is WebKit, which has no Web MIDI. iPadOS reports a Mac user agent.
+  const appleMobile = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
   /** Request access once. Resolves to the access object or throws with the browser's reason. */
   async function connect({ onChange }) {
@@ -49,5 +51,5 @@ const Midi = (() => {
 
   const pedalIsOpen = (cc) => cc < PEDAL_OPEN_BELOW;
 
-  return { PEDAL_CC, PEDAL_OPEN_BELOW, supported, connect, inputs, outputs, input, output, decode, attach, pick, pedalIsOpen };
+  return { PEDAL_CC, PEDAL_OPEN_BELOW, supported, appleMobile, connect, inputs, outputs, input, output, decode, attach, pick, pedalIsOpen };
 })();

@@ -175,7 +175,7 @@
     store.set({ midi: { status, name, inputId } });
     const chip = $("midiChip");
     chip.dataset.status = status;
-    $("midiState").textContent = { connected: name + " connected", none: "No kit: keyboard mode", blocked: "MIDI blocked: allow it in the address bar", unsupported: "No Web MIDI here: use Chrome or Edge", noinputs: "No kit found: plug in the module" }[status] || status;
+    $("midiState").textContent = { connected: name + " connected", none: "No kit: keyboard mode", blocked: "MIDI blocked: allow it in the address bar", unsupported: Midi.appleMobile() ? "No Web MIDI on iPhone or iPad: use a computer" : "No Web MIDI here: use Chrome or Edge", noinputs: "No kit found: plug in the module" }[status] || status;
     renderChecklist();
   }
   async function initMidi() {
