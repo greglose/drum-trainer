@@ -4,7 +4,7 @@ phase: shipped
 active: "v0.5.0 live; the plan in docs/superpowers/plans is complete. Nothing in flight."
 next: "Practise on the Nitro Pro with the new layout and report anything odd; then pick the next phase from 'Next' below."
 blocked: []
-updated: 2026-11-02
+updated: 2026-11-06
 ---
 # Drum Trainer: STATE
 
@@ -34,7 +34,7 @@ a library of patterns that outsiders can contribute to. Everything stays in the 
 ```bash
 node --version        # 22 or newer
 npm ci                # eslint, playwright, axe-core, @fontsource fonts (dev only)
-npm run check         # lint + 58 unit tests + build + 9-scenario browser smoke test
+npm run check         # lint + 58 unit tests + build + 10-scenario browser smoke test
 npm run build         # writes dist/index.html (about 250 KB, one file, fonts embedded)
 ```
 

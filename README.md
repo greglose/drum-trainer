@@ -137,7 +137,7 @@ version. No bundler, no runtime dependency.
 | `skins.cjs` | copy packs | smoke |
 | `audio.js`, `midi.js`, `sinks.js` | Web Audio clock, click and synth; Web MIDI; playback targets (Strategy) | smoke |
 | `staff-view.js`, `report-view.js`, `editor-view.js` | humble views | smoke |
-| `app.js` | wiring | `test/smoke/` (nine scenarios, one file each) |
+| `app.js` | wiring | `test/smoke/` (ten scenarios, one file each) |
 
 Pure modules end in `.cjs` so node can load them; the browser-only ones in `.js`. Each file
 starts with what it owns and must not know about. `test/library.test.js` validates every
